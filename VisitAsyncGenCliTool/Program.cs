@@ -1,6 +1,9 @@
 ﻿namespace VisitAsyncUtils.CliTools
 {
+    using System;
+    using System.Collections.Generic;
     using System.Linq;
+    using System.Threading.Tasks;
 
     using Microsoft.CodeAnalysis;
     using Microsoft.CodeAnalysis.CSharp;
@@ -33,16 +36,16 @@
                     from node in root.DescendantNodes()
                     where node is StructDeclarationSyntax || node is ClassDeclarationSyntax || node is RecordDeclarationSyntax
                     select node;
+                var symbols = new List<ISymbol>();
                 foreach (var node in nodes)
                 {
                     var symbol = model.GetDeclaredSymbol(node);
                     var attributes = symbol.GetAttributes();
-
                     if (attributes.Any(a => a.AttributeClass.Name == nameof(AcceptVisitAsyncAttribute)))
-                    {
-                        Console.WriteLine($"发现目标类: {symbol.ToDisplayString()}");
-                    }
+                        symbols.Add(symbol);
                 }
+                foreach (var symbol in symbols)
+                    Console.WriteLine($"发现目标类: {symbol.ToDisplayString()}");
             }
         }
     }
