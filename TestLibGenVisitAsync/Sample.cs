@@ -20,5 +20,18 @@
         {
             public LinkedList<uint> SampelProperty { get; init; }
         }
+
+        [AcceptVisitAsync]
+        public interface ISamepleInterface
+        {}
+
+        namespace NestedInternalNamespace
+        {
+            [AcceptVisitAsync]
+            public record SampleRecord
+            {
+                public ISamepleInterface InterfaceProperty { get; init; }
+            }
+        }
     }
 }
