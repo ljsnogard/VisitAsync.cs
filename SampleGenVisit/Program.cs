@@ -2,7 +2,7 @@
 {
     using System.Threading;
 
-    public interface IAsyncVisitor
+    public interface IVisitor
     {
         ValueTask<bool> VisitAsync<T>(T val, string key = "", CancellationToken token = default);
     }
@@ -27,13 +27,55 @@
     public sealed class VisitAsyncAttribute : System.Attribute
     { }
 
-    public sealed class SampleVisitor: IAsyncVisitor
+    public sealed class SampleVisitor: IVisitor
     {
         public ValueTask<bool> VisitAsync<T>(T val, string key = "", CancellationToken token = default)
         {
-            Console.WriteLine($"Key({key}): {val}");
-            return ValueTask.FromResult(true);
+            return val switch
+            {
+                byte u8 => this.VisitU8Async(u8, key, token),
+                ushort u16 => this.VisitU16Async(u16, key, token),
+                uint u32 => this.VisitU32Async(u32, key, token),
+                ulong u64 => this.VisitU64Async(u64, key, token),
+                sbyte i8 => this.VisitI8Async(i8, key, token),
+                short i16 => this.VisitI16Async(i16, key, token),
+                int i32 => this.VisitI32Async(i32, key, token),
+                long i64 => this.VisitI64Async(i64, key, token),
+                string str => this.VisitStrAsync(str, key, token),
+                T[] arr => this.VisitArrAsync(arr, key, token),
+                _ => throw new NotImplementedException(),
+            };
         }
+
+        public ValueTask<bool> VisitU8Async(byte val, string key = "", CancellationToken token = default)
+            => throw new NotImplementedException();
+
+        public ValueTask<bool> VisitU16Async(ushort val, string key = "", CancellationToken token = default)
+            => throw new NotImplementedException();
+
+        public ValueTask<bool> VisitU32Async(uint val, string key = "", CancellationToken token = default)
+            => throw new NotImplementedException();
+
+        public ValueTask<bool> VisitU64Async(ulong val, string key = "", CancellationToken token = default)
+            => throw new NotImplementedException();
+
+        public ValueTask<bool> VisitI8Async(sbyte val, string key = "", CancellationToken token = default)
+            => throw new NotImplementedException();
+
+        public ValueTask<bool> VisitI16Async(short val, string key = "", CancellationToken token = default)
+            => throw new NotImplementedException();
+
+        public ValueTask<bool> VisitI32Async(int val, string key = "", CancellationToken token = default)
+            => throw new NotImplementedException();
+
+        public ValueTask<bool> VisitI64Async(long val, string key = "", CancellationToken token = default)
+            => throw new NotImplementedException();
+
+        public ValueTask<bool> VisitStrAsync(string val, string key = "", CancellationToken token = default)
+            => throw new NotImplementedException();
+
+        public ValueTask<bool> VisitArrAsync<T>(T[] val, string key = "", CancellationToken token = default)
+            => throw new NotImplementedException();
     }
 }
 
@@ -50,7 +92,6 @@ namespace SampleGenVisit
 
         public string CanonicalName { get; init; }
     }
-
 }
 
 namespace SampleGenVisit.GeneratedVisitorUtils
@@ -69,7 +110,7 @@ namespace SampleGenVisit.GeneratedVisitorUtils
         /// <param name="token">Cancellation token that will cancel the async visit.</param>
         /// <returns>Whether all async visit are successfully completed.</returns>
         public static async ValueTask<bool> AcceptVisitorAsync<V>(this SampleStruct host, V visitor, CancellationToken token = default)
-            where V : IAsyncVisitor
+            where V : IVisitor
         {
             if (!await visitor.VisitAsync(host.Properties, nameof(host.Properties), token))
                 return false;

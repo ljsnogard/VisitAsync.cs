@@ -5,7 +5,7 @@
 
     using Cysharp.Threading.Tasks;
 
-    public interface IAsyncVisitor
+    public interface IVisitor
     {
         UniTask<bool> VisitAsync<T>(T val, string key = "", CancellationToken token = default);
     }
@@ -21,7 +21,7 @@
     /// <returns></returns>
     public delegate UniTask<bool> FnAcceptVisitAsync<T>(
         T host,
-        IAsyncVisitor visitor,
+        IVisitor visitor,
         string key = "",
         CancellationToken token = default
     );
@@ -31,7 +31,7 @@
     /// </summary>
     public static class AcceptVisitorAsyncExtensions
     {
-        public static UniTask<bool> NotFound<T>(this T host, IAsyncVisitor visitor, string key = "", CancellationToken token = default)
+        public static UniTask<bool> NotFound<T>(this T host, IVisitor visitor, string key = "", CancellationToken token = default)
             => throw new NotImplementedException($"No extension methods found for type \"{typeof(T)}\" with key \"{key}\".");
     }
 }

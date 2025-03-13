@@ -1,11 +1,11 @@
-﻿namespace TestLibGenVisitAsync
+﻿namespace Sample
 {
     using System.Collections.Generic;
     using System.Collections.Immutable;
 
     using VisitAsyncUtils;
 
-    [AcceptVisitAsync]
+    [AllowVisit]
     public record struct SampleStruct
     {
         public ImmutableList<(string, System.Type)> Properties { get; init; }
@@ -15,19 +15,33 @@
 
     namespace InternalNamespace
     {
-        [AcceptVisitAsync]
+        [AllowVisit]
         public sealed class SampleClass
         {
-            public LinkedList<uint> SampelProperty { get; init; }
+            public LinkedList<uint> SampleProperty { get; }
+
+            [IgnoreVisit]
+            public nuint SeenButNotVisitible { get; }
+
+            public SampleClass(LinkedList<uint> sampleProperty)
+            {
+                this.SampleProperty = sampleProperty;
+                this.SeenButNotVisitible = 0;
+            }
+
         }
 
-        [AcceptVisitAsync]
+        [AllowVisit]
         public interface ISamepleInterface
-        {}
+        {
+            public string MyName { get; }
+
+            public ISamepleInterface Neibourgh { get; }
+        }
 
         namespace NestedInternalNamespace
         {
-            [AcceptVisitAsync]
+            [AllowVisit]
             public record SampleRecord
             {
                 public ISamepleInterface InterfaceProperty { get; init; }
