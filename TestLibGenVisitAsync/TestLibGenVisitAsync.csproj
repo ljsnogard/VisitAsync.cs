@@ -8,10 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="UniTask" Version="2.5.10" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\AbsVisitAsync\AbsVisitAsync.csproj" />
+    <PackageReference Include="AbsVisit" Version="0.1.0" />
   </ItemGroup>
 
 </Project>

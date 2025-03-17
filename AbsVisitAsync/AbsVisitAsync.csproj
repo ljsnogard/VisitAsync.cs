@@ -8,6 +8,10 @@
   <PropertyGroup>
     <PackageId>AbsVisit</PackageId>
     <Version>0.1.0</Version>
+    <PackageTags>Visitor Pattern;Codegen</PackageTags>
+    <Description>Provide general interface IVisitor which will be implemented by codegen.</Description>
+    <RepositoryUrl>https://github.com/ljsnogard/VisitAsync.cs</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
     <Authors>lino</Authors>
   </PropertyGroup>
 
