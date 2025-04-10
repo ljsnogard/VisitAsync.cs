@@ -1,11 +1,10 @@
-﻿namespace AsyncVisit
+﻿using SampleGenVisit;
+using VisitAsyncUtils;
+
+namespace AsyncVisit
 {
     using System.Threading;
-
-    public interface IVisitor
-    {
-        ValueTask<bool> VisitAsync<T>(T val, string key = "", CancellationToken token = default);
-    }
+    using Cysharp.Threading.Tasks;
 
     /// <summary>
     /// Useful only for serde occations, not part of the visitor pattern.
@@ -27,9 +26,16 @@
     public sealed class VisitAsyncAttribute : System.Attribute
     { }
 
-    public sealed class SampleVisitor: IVisitor
+    public readonly struct MyVisitorFactory<H, V> : IVisitorFactory<H, V>
+        where V : IVisitor<H>
     {
-        public ValueTask<bool> VisitAsync<T>(T val, string key = "", CancellationToken token = default)
+        public UniTask<V> GetVisitorAsync(H host, CancellationToken token = default)
+            => throw new NotImplementedException();
+    }
+
+    public sealed class SampleVisitor<H>: IVisitor<H>, IDisposable
+    {
+        public UniTask<bool> VisitAsync<T>(T val, string key = "", CancellationToken token = default)
         {
             return val switch
             {
@@ -47,34 +53,37 @@
             };
         }
 
-        public ValueTask<bool> VisitU8Async(byte val, string key = "", CancellationToken token = default)
+        public void Dispose()
+        {}
+
+        public UniTask<bool> VisitU8Async(byte val, string key = "", CancellationToken token = default)
             => throw new NotImplementedException();
 
-        public ValueTask<bool> VisitU16Async(ushort val, string key = "", CancellationToken token = default)
+        public UniTask<bool> VisitU16Async(ushort val, string key = "", CancellationToken token = default)
             => throw new NotImplementedException();
 
-        public ValueTask<bool> VisitU32Async(uint val, string key = "", CancellationToken token = default)
+        public UniTask<bool> VisitU32Async(uint val, string key = "", CancellationToken token = default)
             => throw new NotImplementedException();
 
-        public ValueTask<bool> VisitU64Async(ulong val, string key = "", CancellationToken token = default)
+        public UniTask<bool> VisitU64Async(ulong val, string key = "", CancellationToken token = default)
             => throw new NotImplementedException();
 
-        public ValueTask<bool> VisitI8Async(sbyte val, string key = "", CancellationToken token = default)
+        public UniTask<bool> VisitI8Async(sbyte val, string key = "", CancellationToken token = default)
             => throw new NotImplementedException();
 
-        public ValueTask<bool> VisitI16Async(short val, string key = "", CancellationToken token = default)
+        public UniTask<bool> VisitI16Async(short val, string key = "", CancellationToken token = default)
             => throw new NotImplementedException();
 
-        public ValueTask<bool> VisitI32Async(int val, string key = "", CancellationToken token = default)
+        public UniTask<bool> VisitI32Async(int val, string key = "", CancellationToken token = default)
             => throw new NotImplementedException();
 
-        public ValueTask<bool> VisitI64Async(long val, string key = "", CancellationToken token = default)
+        public UniTask<bool> VisitI64Async(long val, string key = "", CancellationToken token = default)
             => throw new NotImplementedException();
 
-        public ValueTask<bool> VisitStrAsync(string val, string key = "", CancellationToken token = default)
+        public UniTask<bool> VisitStrAsync(string val, string key = "", CancellationToken token = default)
             => throw new NotImplementedException();
 
-        public ValueTask<bool> VisitArrAsync<T>(T[] val, string key = "", CancellationToken token = default)
+        public UniTask<bool> VisitArrAsync<T>(T[] val, string key = "", CancellationToken token = default)
             => throw new NotImplementedException();
     }
 }
@@ -97,8 +106,10 @@ namespace SampleGenVisit
 namespace SampleGenVisit.GeneratedVisitorUtils
 {
     using AsyncVisit;
-
+    using Cysharp.Threading.Tasks;
     using System.Collections.Immutable;
+
+    using VisitAsyncUtils;
 
     public static class SampleGenVisitAccessExtensions
     {
@@ -106,12 +117,14 @@ namespace SampleGenVisit.GeneratedVisitorUtils
         /// Generated method for <see cref="SampleStruct">SampleStruct</see> to accept an <see cref="IAsyncVisitor">IAsyncVisitor</see> to iterate its public properties and field.
         /// </summary>
         /// <param name="host">The object that will accept the visitor.</param>
-        /// <param name="visitor">The object that will iterate visit.</param>
+        /// <param name="factory">The factory object that will provide the visitor for the host.</param>
         /// <param name="token">Cancellation token that will cancel the async visit.</param>
         /// <returns>Whether all async visit are successfully completed.</returns>
-        public static async ValueTask<bool> AcceptVisitorAsync<V>(this SampleStruct host, V visitor, CancellationToken token = default)
-            where V : IVisitor
+        public static async ValueTask<bool> AcceptVisitorAsync<F, V>(this SampleStruct host, F factory, CancellationToken token = default)
+            where F : IVisitorFactory<SampleStruct, V>
+            where V : IVisitor<SampleStruct>
         {
+            using var visitor = await factory.GetVisitorAsync(host, token);
             if (!await visitor.VisitAsync(host.Properties, nameof(host.Properties), token))
                 return false;
             if (!await visitor.VisitAsync(host.CanonicalName, nameof(host.CanonicalName), token))
@@ -132,11 +145,26 @@ namespace SampleGenVisit.GeneratedVisitorUtils
 
 namespace Demo
 {
+    using AsyncVisit;
+
     internal class Program
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("Hello, World!");
+            // var s = new SampleStruct();
+            FnAcceptVisitorAsync
+                < SampleStruct
+                , MyVisitorFactory<SampleStruct, SampleVisitor<SampleStruct>>
+                , SampleVisitor<SampleStruct>
+                > f;
+
+            f = AcceptVisitorAsyncExtensions.NotFound
+                < SampleStruct
+                , MyVisitorFactory<SampleStruct, SampleVisitor<SampleStruct>>
+                , SampleVisitor<SampleStruct>
+                >;
+
+            Console.WriteLine($"Hello, {f.GetType()}");
         }
     }
 }

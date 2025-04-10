@@ -156,7 +156,13 @@
 
                     await Console.Out.WriteLineAsync($"正在为 {document.Name} 生成代码文件 {absFilePath} (documentId: {documentId})");
 
-                    using var file = File.Open(absFilePath, FileMode.OpenOrCreate);
+                    /// https://stackoverflow.com/questions/1225857/write-string-to-text-file-and-ensure-it-always-overwrites-the-existing-content/1225869
+                    /// * If the file exists, this overwrites it.
+                    /// * If the file does not exist, this creates it.
+                    File.WriteAllText(absFilePath, string.Empty);
+
+                    /// Exclusively open file and write generated code into it.
+                    using var file = new FileStream(absFilePath, FileMode.Open, FileAccess.Write, FileShare.None);
                     await GenerateFileLevelCodeAsync(
                         codeGenSettings,
                         project.Name,
@@ -178,7 +184,7 @@
             CodeGenSettings codeGenSettings,
             string projName,
             string documentId,
-            Stream ioStream,
+            FileStream fileStream,
             Document document,
             List<ISymbol> symbolsList)
         {
@@ -191,11 +197,11 @@
 /// </auto-generated>
 
 ";
-                await ioStream.WriteAsync(topComment);
+                await fileStream.WriteAsync(topComment);
 
                 var genFileNameSpace = $"{projName}.GenVisit";
                 var nsLine = $"namespace {genFileNameSpace};\n";
-                await ioStream.WriteAsync(nsLine);
+                await fileStream.WriteAsync(nsLine);
 
                 var usingLine = @$"
 using System.Threading; // To use CancellationToken
@@ -205,19 +211,20 @@ using {codeGenSettings.UsingLineStr};
 using VisitAsyncUtils;
 
 ";
-                await ioStream.WriteAsync(usingLine);
+                await fileStream.WriteAsync(usingLine);
 
                 var genExtensionName = $"{documentId}_AcceptVisitorExtensions";
                 var extLine = $"public static class {genExtensionName}\n" + "{";
-                await ioStream.WriteAsync(extLine);
+                await fileStream.WriteAsync(extLine);
 
                 foreach (var typeSymbol in symbolsList)
                 {
                     if (typeSymbol is not INamedTypeSymbol namedTypeSymbol)
                         throw new Exception($"Expect {nameof(INamedTypeSymbol)}, but {typeSymbol.GetType().FullName} encountered.");
-                    await GenerateTypeSymbolCodeAsync(codeGenSettings, ioStream, document, namedTypeSymbol);
+                    await GenerateTypeSymbolCodeAsync(codeGenSettings, fileStream, document, namedTypeSymbol);
                 }
-                await ioStream.WriteAsync("}\n");
+                await fileStream.WriteAsync("}\n");
+                await fileStream.FlushAsync();
             }
             catch (Exception e)
             {
@@ -241,12 +248,23 @@ using VisitAsyncUtils;
 {tab}/// {tab}Generated extension method to allow visitor accessing to the members of <c>{hostTypeFullName}</c> declared in the source file <c>{document.Name}</c>.
 {tab}/// </summary>";
 
-                var extFnDecl = $"public static async {codeGenSettings.TasksTypeStr} AcceptAsync<V>(this {hostTypeFullName} host, V visitor, CancellationToken token = default) where V : IVisitor";
-                var declLine = $"\n{commentLines}\n{tab}{extFnDecl}\n{tab}" + "{\n";
+                var extFnDecl0 = $"public static async {codeGenSettings.TasksTypeStr} AcceptAsync<F, V>(this {hostTypeFullName} host, F factory, CancellationToken token = default)";
+                var extFnDeclF = $"where F : IVisitorFactory<{hostTypeFullName}, V>";
+                var extFnDeclV = $"where V : IVisitor<{hostTypeFullName}>";
+
+                var declLine = $"\n{commentLines}\n{tab}{extFnDecl0}\n{tab}{tab}{extFnDeclF}\n{tab}{tab}{extFnDeclV}\n{tab}" + "{\n";
                 await ioStream.WriteAsync(declLine);
 
-                foreach (var member in namedTypeSymbol.GetVisitableMembers())
-                    await GenerateMemberSymbolCodeAsync(codeGenSettings, ioStream, namedTypeSymbol, member);
+                var members = namedTypeSymbol.GetVisitableMembers();
+                if (members.Any())
+                {
+                    var declUsingLine = $"{tab}{tab}using var visitor = await factory.GetVisitorAsync(host, token);\n\n";
+                    await ioStream.WriteAsync(declUsingLine);
+                    foreach (var member in namedTypeSymbol.GetVisitableMembers())
+                        await GenerateMemberSymbolCodeAsync(codeGenSettings, ioStream, namedTypeSymbol, member);
+                }
+                else
+                    await GenerateCodeForEmptyTypeSymbolAsync(codeGenSettings, ioStream, namedTypeSymbol);
 
                 var enclosingLine = $"{tab}{tab}return true;\n{tab}" + "}\n";
                 await ioStream.WriteAsync(enclosingLine);
@@ -270,7 +288,7 @@ using VisitAsyncUtils;
                 var visitLine = $"bool visit_{memberSymbol.Name}_Succeeded = await visitor.VisitAsync(host.{memberSymbol.Name}, nameof(host.{memberSymbol.Name}), token);";
                 var judgeLine = $"if (!visit_{memberSymbol.Name}_Succeeded)";
                 var retLine = "return false;";
-                var stmt = $"{tab}{tab}{visitLine}\n{tab}{tab}{judgeLine}\n{tab}{tab}{tab}{retLine}\n";
+                var stmt = $"{tab}{tab}{visitLine}\n{tab}{tab}{judgeLine}\n{tab}{tab}{tab}{retLine}\n\n";
                 await ioStream.WriteAsync(stmt);
             }
             catch (Exception e)
@@ -278,6 +296,18 @@ using VisitAsyncUtils;
                 await Console.Out.WriteLineAsync($"{e}");
                 throw;
             }
+        }
+
+        static async ValueTask GenerateCodeForEmptyTypeSymbolAsync(
+            CodeGenSettings codeGenSettings,
+            Stream ioStream,
+            INamedTypeSymbol namedTypeSymbol)
+        {
+            var tab = codeGenSettings.TabStr;
+            var commentLine = $"// type {namedTypeSymbol.Name} has no any appropriate members to visit";
+            var visitLine = "await ValueTask.CompletedTask;";
+            var stmt = $"{tab}{tab}{commentLine}\n{tab}{tab}{visitLine}\n";
+            await ioStream.WriteAsync(stmt);
         }
     }
 
