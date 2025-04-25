@@ -4,15 +4,13 @@ namespace VisitAsyncUtils.CliTools
 
     public sealed class ScanSettings
     {
-        private readonly bool shouldReqAttr_;
+        private readonly bool isAttrRequired_;
 
-        public ScanSettings(bool shouldRequireAttributed = false)
-        {
-            this.shouldReqAttr_ = shouldRequireAttributed;
-        }
+        public ScanSettings(bool isAttrRequired = false)
+            => this.isAttrRequired_ = isAttrRequired;
 
-        public bool ShouldRequireAttributed
-            => this.shouldReqAttr_;
+        public bool IsAttributeRequired
+            => this.isAttrRequired_;
     }
 
     public sealed class CodeGenSettings
@@ -54,7 +52,6 @@ namespace VisitAsyncUtils.CliTools
 
         public TabOptions TabOptions
             => this.tabOpts_;
-
 
         public string UsingLineStr
             => this.usingLineStr_;
