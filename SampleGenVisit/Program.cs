@@ -4,6 +4,7 @@ using VisitAsyncUtils;
 namespace AsyncVisit
 {
     using System.Threading;
+    using System.Threading.Tasks;
     using Cysharp.Threading.Tasks;
 
     /// <summary>
@@ -31,6 +32,13 @@ namespace AsyncVisit
     {
         public UniTask<V> GetVisitorAsync(H host, CancellationToken token = default)
             => throw new NotImplementedException();
+
+        public UniTask<IVisitorFactory<TH, TV>> RebindAsync<TH, TV>(CancellationToken token = default)
+            where TV : IVisitor<TH>
+        {
+            IVisitorFactory<TH, TV> f = new MyVisitorFactory<TH, TV>();
+            return UniTask.FromResult(f);
+        }
     }
 
     public sealed class SampleVisitor<H>: IVisitor<H>, IDisposable
@@ -95,12 +103,28 @@ namespace SampleGenVisit
     using AsyncVisit;
 
     [VisitAsync]
-    public record struct SampleStruct
+    public record struct SampleStruct : ISampleInterface
     {
         public ImmutableList<(string, System.Type)> Properties { get; init; }
 
         public string CanonicalName { get; init; }
     }
+
+    public sealed class AnotherClass : ISampleInterface
+    {
+        public string Name { get; set; }
+
+        public List<uint> MyList { get; set; }
+
+        public AnotherClass(string name, List<uint> myList)
+        {
+            this.Name = name;
+            this.MyList = myList;
+        }
+    }
+
+    public interface ISampleInterface
+    { }
 }
 
 namespace SampleGenVisit.GeneratedVisitorUtils
@@ -132,6 +156,18 @@ namespace SampleGenVisit.GeneratedVisitorUtils
             return true;
         }
 
+        public static async ValueTask<bool> AcceptVisitorAsync<F, V>(this AnotherClass host, F factory, CancellationToken token = default)
+            where F : IVisitorFactory<AnotherClass, V>
+            where V : IVisitor<AnotherClass>
+        {
+            using var visitor = await factory.GetVisitorAsync(host, token);
+            if (!await visitor.VisitAsync(host.Name, nameof(host.Name), token))
+                return false;
+            if (!await visitor.VisitAsync(host.MyList, nameof(host.MyList), token))
+                return false;
+            return true;
+        }
+
         public static ReadOnlyMemory<(string, System.Type, SerdeOptions)> SerdeSchema(this SampleStruct host)
         {
             return new[]
@@ -139,6 +175,32 @@ namespace SampleGenVisit.GeneratedVisitorUtils
                 (nameof(host.Properties), typeof(ImmutableList<(string, System.Type)>), SerdeOptions.AsArr),
                 (nameof(host.CanonicalName), typeof(string), SerdeOptions.AsStr),
             };
+        }
+
+        public static async ValueTask<bool> AcceptVisitorAsync<F, V>(this ISampleInterface host, F factory, CancellationToken token = default)
+            where F : IVisitorFactory<ISampleInterface, V>
+            where V : IVisitor<ISampleInterface>
+        {
+            if (factory is not IRebindableVisitorFactory re)
+            {
+                var m = $"Not rebindable factory type ({factory.GetType()}) when visiting {typeof(ISampleInterface)}";
+                throw new NotFiniteNumberException();
+            }
+            if (host is SampleStruct x_SampleStruct)
+            {
+                var f_SampleStruct = await re.GetFactoryAsync<SampleStruct, IVisitor<SampleStruct>>(token);
+                return await x_SampleStruct.AcceptVisitorAsync<IVisitorFactory<SampleStruct, IVisitor<SampleStruct>>, IVisitor<SampleStruct>>(f_SampleStruct, token);
+            }
+            if (host is AnotherClass x_AnotherClass)
+            {
+                var f_AnotherClass = await re.GetFactoryAsync<AnotherClass, IVisitor<AnotherClass>>(token);
+                return await x_AnotherClass.AcceptVisitorAsync<IVisitorFactory<AnotherClass, IVisitor<AnotherClass>>, IVisitor<AnotherClass>>(f_AnotherClass, token);
+            }
+            else
+            {
+                var m = $"Unsupported type {host.GetType()} encountered when visiting {typeof(ISampleInterface)}";
+                throw new NotSupportedException(m);
+            }
         }
     }
 }

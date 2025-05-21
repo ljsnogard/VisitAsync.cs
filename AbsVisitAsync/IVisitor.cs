@@ -20,10 +20,13 @@
     public interface IVisitorFactory<THost, TVisitor>
         where TVisitor : IVisitor<THost>
     {
-        UniTask<TVisitor> GetVisitorAsync
-            ( THost host
-            , CancellationToken token = default
-            );
+        UniTask<TVisitor> GetVisitorAsync(THost host, CancellationToken token = default);
+    }
+
+    public interface IRebindableVisitorFactory
+    {
+        UniTask<IVisitorFactory<THost, TVisitor>> GetFactoryAsync<THost, TVisitor>(CancellationToken token = default)
+            where TVisitor : IVisitor<THost>;
     }
 
     /// <summary>

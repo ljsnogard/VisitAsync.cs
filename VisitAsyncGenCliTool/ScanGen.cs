@@ -150,7 +150,7 @@ namespace VisitAsyncUtils.CliTools
                     using var file = new FileStream(absFilePath, FileMode.Open, FileAccess.Write, FileShare.None);
                     await GenerateFileLevelCodeAsync(
                         this.codeGenSettings_,
-                        this.project_.Name,
+                        this.project_,
                         documentId,
                         file,
                         document,
@@ -167,7 +167,7 @@ namespace VisitAsyncUtils.CliTools
 
         static async ValueTask GenerateFileLevelCodeAsync(
             CodeGenSettings codeGenSettings,
-            string projName,
+            Project project,
             string documentId,
             FileStream fileStream,
             Document document,
@@ -184,8 +184,8 @@ namespace VisitAsyncUtils.CliTools
 ";
                 await fileStream.WriteAsync(topComment);
 
-                var genFileNameSpace = $"{projName}.GenVisit";
-                var nsLine = $"namespace {genFileNameSpace};\n";
+                var genFileNameSpace = $"{project.Name}.GenVisit";
+                var nsLine = $"namespace {genFileNameSpace}\n{{\n";
                 await fileStream.WriteAsync(nsLine);
 
                 var usingLine = @$"
@@ -206,9 +206,13 @@ using VisitAsyncUtils;
                 {
                     if (typeSymbol is not INamedTypeSymbol namedTypeSymbol)
                         throw new Exception($"Expect {nameof(INamedTypeSymbol)}, but {typeSymbol.GetType().FullName} encountered.");
-                    await GenerateTypeSymbolCodeAsync(codeGenSettings, fileStream, document, namedTypeSymbol);
+
+                    if (namedTypeSymbol.TypeKind == TypeKind.Interface || (namedTypeSymbol.TypeKind == TypeKind.Class && namedTypeSymbol.IsAbstract))
+                        await GenerateAbstractTypeSymbolCodeAsync(codeGenSettings, project, fileStream, document, namedTypeSymbol);
+                    else
+                        await GenerateConcreteTypeSymbolCodeAsync(codeGenSettings, project, fileStream, document, namedTypeSymbol);
                 }
-                await fileStream.WriteAsync("}\n");
+                await fileStream.WriteAsync("}\n}\n");
                 await fileStream.FlushAsync();
             }
             catch (Exception e)
@@ -218,8 +222,9 @@ using VisitAsyncUtils;
             }
         }
 
-        static async ValueTask GenerateTypeSymbolCodeAsync(
+        static async ValueTask GenerateConcreteTypeSymbolCodeAsync(
             CodeGenSettings codeGenSettings,
+            Project project,
             Stream ioStream,
             Document document,
             INamedTypeSymbol namedTypeSymbol)
@@ -261,6 +266,123 @@ using VisitAsyncUtils;
             }
         }
 
+        static async ValueTask GenerateAbstractTypeSymbolCodeAsync(
+            CodeGenSettings codeGenSettings,
+            Project project,
+            Stream ioStream,
+            Document document,
+            INamedTypeSymbol namedTypeSymbol)
+        {
+            static async ValueTask<List<INamedTypeSymbol>> FindImplementationsAsync(
+                Project project,
+                INamedTypeSymbol targetType,
+                CancellationToken cancellationToken = default)
+            {
+                var implementations = new List<INamedTypeSymbol>();
+
+                foreach (var document in project.Documents)
+                {
+                    var syntaxRoot = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
+                    var semanticModel = await document.GetSemanticModelAsync(cancellationToken).ConfigureAwait(false);
+                    if (syntaxRoot == null || semanticModel == null)
+                        continue;
+
+                    // Find all type declarations in the file
+                    var typeDeclarations = syntaxRoot.DescendantNodes()
+                        .OfType<TypeDeclarationSyntax>();
+
+                    foreach (var typeDecl in typeDeclarations)
+                    {
+                        var symbol = semanticModel.GetDeclaredSymbol(typeDecl, cancellationToken) as INamedTypeSymbol;
+                        if (symbol == null || symbol.TypeKind != TypeKind.Class || symbol.IsAbstract)
+                            continue;
+
+                        if (InheritsOrImplements(symbol, targetType))
+                        {
+                            implementations.Add(symbol);
+                        }
+                    }
+                }
+                return implementations;
+            }
+
+            static bool InheritsOrImplements(INamedTypeSymbol typeSymbol, INamedTypeSymbol targetSymbol)
+            {
+                // Check interface implementation
+                if (targetSymbol.TypeKind == TypeKind.Interface)
+                {
+                    return typeSymbol.AllInterfaces.Any(i =>
+                        SymbolEqualityComparer.Default.Equals(i, targetSymbol));
+                }
+
+                // Check class inheritance
+                if (targetSymbol.TypeKind == TypeKind.Class && targetSymbol.IsAbstract)
+                {
+                    var baseType = typeSymbol.BaseType;
+                    while (baseType != null)
+                    {
+                        if (SymbolEqualityComparer.Default.Equals(baseType, targetSymbol))
+                            return true;
+                        baseType = baseType.BaseType;
+                    }
+                }
+
+                return false;
+            }
+
+            var tab = codeGenSettings.TabStr;
+            var tab2 = $"{tab}{tab}";
+            try
+            {
+                var hostTypeFullName = namedTypeSymbol.ToDisplayString();
+                var hostVarName = "host";
+
+                var commentLines = @$"{tab}/// <summary>
+{tab}/// {tab}Generated extension method to allow visitor accessing to the derivative types of <c>{hostTypeFullName}</c> declared in the project <c>{document.Name}</c>.
+{tab}/// </summary>";
+
+                var extFnDecl0 = $"public static async {codeGenSettings.TasksTypeStr} AcceptAsync<F, V>(this {hostTypeFullName} {hostVarName}, F factory, CancellationToken token = default)";
+                var extFnDeclF = $"where F : IVisitorFactory<{hostTypeFullName}, V>";
+                var extFnDeclV = $"where V : IVisitor<{hostTypeFullName}>";
+
+                var declLine = $"\n{commentLines}\n{tab}{extFnDecl0}\n{tab}{tab}{extFnDeclF}\n{tab}{tab}{extFnDeclV}\n{tab}" + "{\n";
+                await ioStream.WriteAsync(declLine);
+
+                var implementations = await FindImplementationsAsync(project, namedTypeSymbol);
+                if (!implementations.Any())
+                {
+                    await GenerateCodeForEmptyTypeSymbolAsync(codeGenSettings, ioStream, namedTypeSymbol);
+                    return;
+                }
+                var factorNewName = "re";
+                {
+                    var factoryCast = $"if (factory is not {nameof(IRebindableVisitorFactory)} {factorNewName})";
+                    var braceBegin = "{";
+                    var factoryErrL1 = $"var m = $\"Not rebindable factory type ({{factory.GetType()}}) when visiting {{typeof({hostTypeFullName})}}\";";
+                    var factoryErrL2 = "throw new NotFiniteNumberException();";
+                    var braceEnd = "}";
+                    var castErrLine = $"\n{tab2}{factoryCast}\n{tab2}{braceBegin}\n{tab2}{tab}{factoryErrL1}\n{tab2}{tab}{factoryErrL2}\n{tab2}{braceEnd}";
+                    await ioStream.WriteAsync(castErrLine);
+                }
+                foreach (var subTypeSymbol in implementations)
+                    await GenerateSubTypeSymbolCodeAsync(codeGenSettings, ioStream, subTypeSymbol, hostVarName, factorNewName);
+                if (true)
+                {
+                    var braceBegin = "{";
+                    var initErrMsg = $"var m = $\"Unsupported type {{{hostVarName}.GetType()}} encountered when visiting {{typeof({hostTypeFullName})}}\";";
+                    var stmtThrow = "throw new NotSupportedException(m);";
+                    var braceEnd = "}";
+                    var enclosingElseStmt = $"\n{tab2}else\n{tab2}{braceBegin}\n{tab2}{tab}{initErrMsg}\n{tab2}{tab}{stmtThrow}\n{tab2}{braceEnd}\n{tab}{braceEnd}";
+                    await ioStream.WriteAsync(enclosingElseStmt);
+                }
+            }
+            catch (Exception e)
+            {
+                await Console.Out.WriteLineAsync($"{e}");
+                throw;
+            }
+        }
+
         static async ValueTask GenerateMemberSymbolCodeAsync(
             CodeGenSettings codeGenSettings,
             Stream ioStream,
@@ -275,6 +397,36 @@ using VisitAsyncUtils;
                 var retLine = "return false;";
                 var stmt = $"{tab}{tab}{visitLine}\n{tab}{tab}{judgeLine}\n{tab}{tab}{tab}{retLine}\n\n";
                 await ioStream.WriteAsync(stmt);
+            }
+            catch (Exception e)
+            {
+                await Console.Out.WriteLineAsync($"{e}");
+                throw;
+            }
+        }
+
+        static async ValueTask GenerateSubTypeSymbolCodeAsync(
+            CodeGenSettings codeGenSettings,
+            Stream ioStream,
+            INamedTypeSymbol subTypeSymbol,
+            string host,
+            string rebind)
+        {
+            var tab = codeGenSettings.TabStr;
+            var tab2 = $"{tab}{tab}";
+            var subTypeFullName = subTypeSymbol.ToDisplayString();
+            var subTypeShortName = subTypeSymbol.Name;
+            var hostNewName = $"x_{subTypeShortName}";
+            var factoryNewName = $"f_{subTypeShortName}";
+            try
+            {
+                var hostCast = $"if ({host} is {subTypeFullName} {hostNewName})";
+                var braceBegin = "{";
+                var l1 = $"var {factoryNewName} = await {rebind}.GetFactoryAsync<{subTypeFullName}, IVisitor<{subTypeFullName}>>(token);";
+                var l2 = $"return await {hostNewName}.AcceptAsync<IVisitorFactory<{subTypeFullName}, IVisitor<{subTypeFullName}>>, IVisitor<{subTypeFullName}>>({factoryNewName}, token);";
+                var braceEnd = "}";
+                var castErrLine = $"\n{tab2}{hostCast}\n{tab2}{braceBegin}\n{tab2}{tab}{l1}\n{tab2}{tab}{l2}\n{tab2}{braceEnd}";
+                await ioStream.WriteAsync(castErrLine);
             }
             catch (Exception e)
             {
