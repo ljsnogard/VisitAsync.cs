@@ -440,7 +440,7 @@ using VisitAsyncUtils;
         {
             var tab = codeGenSettings.TabStr;
             var commentLine = $"// type {namedTypeSymbol.Name} has no any appropriate members to visit";
-            var visitLine = "await ValueTask.CompletedTask;";
+            var visitLine = "await System.Threading.Tasks.Task.CompletedTask;";
             var stmt = $"{tab}{tab}{commentLine}\n{tab}{tab}{visitLine}\n";
             await ioStream.WriteAsync(stmt);
         }

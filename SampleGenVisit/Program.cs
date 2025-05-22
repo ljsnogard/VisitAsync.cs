@@ -135,7 +135,7 @@ namespace SampleGenVisit.GeneratedVisitorUtils
 
     using VisitAsyncUtils;
 
-    public static class SampleGenVisitAccessExtensions
+    public static class SampleStruct_VisitAccessExtensions
     {
         /// <summary>
         /// Generated method for <see cref="SampleStruct">SampleStruct</see> to accept an <see cref="IAsyncVisitor">IAsyncVisitor</see> to iterate its public properties and field.
@@ -144,7 +144,7 @@ namespace SampleGenVisit.GeneratedVisitorUtils
         /// <param name="factory">The factory object that will provide the visitor for the host.</param>
         /// <param name="token">Cancellation token that will cancel the async visit.</param>
         /// <returns>Whether all async visit are successfully completed.</returns>
-        public static async ValueTask<bool> AcceptVisitorAsync<F, V>(this SampleStruct host, F factory, CancellationToken token = default)
+        public static async UniTask<bool> AcceptVisitorAsync<F, V>(this SampleStruct host, F factory, CancellationToken token = default)
             where F : IVisitorFactory<SampleStruct, V>
             where V : IVisitor<SampleStruct>
         {
@@ -155,8 +155,11 @@ namespace SampleGenVisit.GeneratedVisitorUtils
                 return false;
             return true;
         }
+    }
 
-        public static async ValueTask<bool> AcceptVisitorAsync<F, V>(this AnotherClass host, F factory, CancellationToken token = default)
+    public static class AnotherClass_VisitAccessExtensions
+    {
+        public static async UniTask<bool> AcceptVisitorAsync<F, V>(this AnotherClass host, F factory, CancellationToken token = default)
             where F : IVisitorFactory<AnotherClass, V>
             where V : IVisitor<AnotherClass>
         {
@@ -176,8 +179,11 @@ namespace SampleGenVisit.GeneratedVisitorUtils
                 (nameof(host.CanonicalName), typeof(string), SerdeOptions.AsStr),
             };
         }
+    }
 
-        public static async ValueTask<bool> AcceptVisitorAsync<F, V>(this ISampleInterface host, F factory, CancellationToken token = default)
+    public static class ISampleInterface_VisitAccessExtensions
+    {
+        public static async UniTask<bool> AcceptVisitorAsync<F, V>(this ISampleInterface host, F factory, CancellationToken token = default)
             where F : IVisitorFactory<ISampleInterface, V>
             where V : IVisitor<ISampleInterface>
         {
