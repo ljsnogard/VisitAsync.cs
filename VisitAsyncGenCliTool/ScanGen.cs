@@ -199,22 +199,27 @@ using VisitAsyncUtils;
 ";
                 await fileStream.WriteAsync(usingLine);
 
-                var genExtensionName = $"{documentId}_AcceptVisitorExtensions";
-                var extLine = $"public static class {genExtensionName}\n" + "{";
-                await fileStream.WriteAsync(extLine);
-
                 foreach (var typeSymbol in symbolsList)
                 {
                     if (typeSymbol is not INamedTypeSymbol namedTypeSymbol)
                         throw new Exception($"Expect {nameof(INamedTypeSymbol)}, but {typeSymbol.GetType().FullName} encountered.");
 
+                    var extKlassPrefix = namedTypeSymbol.ToDisplayString().Replace('.', '_');
+
+                    var genExtensionName = $"{extKlassPrefix}_AcceptVisitExt";
+                    var extLine = $"public static class {genExtensionName}\n" + "{";
+                    await fileStream.WriteAsync(extLine);
+
                     if (namedTypeSymbol.TypeKind == TypeKind.Interface || (namedTypeSymbol.TypeKind == TypeKind.Class && namedTypeSymbol.IsAbstract))
                         await GenerateAbstractTypeSymbolCodeAsync(codeGenSettings, project, fileStream, document, namedTypeSymbol);
                     else
                         await GenerateConcreteTypeSymbolCodeAsync(codeGenSettings, project, fileStream, document, namedTypeSymbol);
+
+                    await fileStream.WriteAsync("}\n\n");
+                    await fileStream.FlushAsync();
                 }
-                await fileStream.WriteAsync("}\n}\n");
-                await fileStream.FlushAsync();
+
+                await fileStream.WriteAsync("}\n\n");
             }
             catch (Exception e)
             {
@@ -370,7 +375,7 @@ using VisitAsyncUtils;
                     var initErrMsg = $"var m = $\"Unsupported type {{{hostVarName}.GetType()}} encountered when visiting {{typeof({hostTypeFullName})}}\";";
                     var stmtThrow = "throw new NotSupportedException(m);";
                     var braceEnd = "}";
-                    var enclosingElseStmt = $"\n{tab2}else\n{tab2}{braceBegin}\n{tab2}{tab}{initErrMsg}\n{tab2}{tab}{stmtThrow}\n{tab2}{braceEnd}\n{tab}{braceEnd}";
+                    var enclosingElseStmt = $"\n{tab2}else\n{tab2}{braceBegin}\n{tab2}{tab}{initErrMsg}\n{tab2}{tab}{stmtThrow}\n{tab2}{braceEnd}\n{tab}{braceEnd}\n";
                     await ioStream.WriteAsync(enclosingElseStmt);
                 }
             }
