@@ -189,6 +189,7 @@ namespace VisitAsyncUtils.CliTools
                 await fileStream.WriteAsync(nsLine);
 
                 var usingLine = @$"
+using System; // To use NotSupportedException
 using System.Threading; // To use CancellationToken
 
 using {codeGenSettings.UsingLineStr}; 
@@ -282,25 +283,22 @@ using VisitAsyncUtils;
 
                 foreach (var document in project.Documents)
                 {
-                    var syntaxRoot = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
-                    var semanticModel = await document.GetSemanticModelAsync(cancellationToken).ConfigureAwait(false);
+                    var syntaxRoot = await document.GetSyntaxRootAsync(cancellationToken);
+                    var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
                     if (syntaxRoot == null || semanticModel == null)
                         continue;
 
                     // Find all type declarations in the file
-                    var typeDeclarations = syntaxRoot.DescendantNodes()
-                        .OfType<TypeDeclarationSyntax>();
+                    var typeDeclarations = syntaxRoot.DescendantNodes().OfType<TypeDeclarationSyntax>();
 
                     foreach (var typeDecl in typeDeclarations)
                     {
                         var symbol = semanticModel.GetDeclaredSymbol(typeDecl, cancellationToken) as INamedTypeSymbol;
-                        if (symbol == null || symbol.TypeKind != TypeKind.Class || symbol.IsAbstract)
+                        if (symbol == null || symbol.IsAbstract)
                             continue;
 
                         if (InheritsOrImplements(symbol, targetType))
-                        {
                             implementations.Add(symbol);
-                        }
                     }
                 }
                 return implementations;
@@ -359,7 +357,7 @@ using VisitAsyncUtils;
                     var factoryCast = $"if (factory is not {nameof(IRebindableVisitorFactory)} {factorNewName})";
                     var braceBegin = "{";
                     var factoryErrL1 = $"var m = $\"Not rebindable factory type ({{factory.GetType()}}) when visiting {{typeof({hostTypeFullName})}}\";";
-                    var factoryErrL2 = "throw new NotFiniteNumberException();";
+                    var factoryErrL2 = "throw new NotSupportedException(m);";
                     var braceEnd = "}";
                     var castErrLine = $"\n{tab2}{factoryCast}\n{tab2}{braceBegin}\n{tab2}{tab}{factoryErrL1}\n{tab2}{tab}{factoryErrL2}\n{tab2}{braceEnd}";
                     await ioStream.WriteAsync(castErrLine);

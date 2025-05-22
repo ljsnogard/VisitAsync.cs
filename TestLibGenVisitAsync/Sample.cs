@@ -1,15 +1,14 @@
 ﻿namespace Sample
 {
     using System.Collections.Generic;
-    using System.Collections.Immutable;
 
     using VisitAsyncUtils;
 
-    public record struct SampleStruct
+    public struct SampleStruct
     {
-        public ImmutableList<(string, System.Type)> Properties { get; init; }
+        public List<(string, System.Type)> Properties { get; set; }
 
-        public string CanonicalName { get; init; }
+        public string CanonicalName { get; set; }
     }
 
     namespace InternalNamespace
