@@ -2,12 +2,14 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>9</LangVersion>
+    <Nullable>enable</Nullable>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
   </PropertyGroup>
 
   <PropertyGroup>
     <PackageId>AbsVisit</PackageId>
-    <Version>0.2.1</Version>
+    <Version>0.3.0</Version>
     <PackageTags>Visitor Pattern;Codegen</PackageTags>
     <Description>Provide general interface IVisitor which will be implemented by other.</Description>
     <RepositoryUrl>https://github.com/ljsnogard/VisitAsync.cs</RepositoryUrl>
