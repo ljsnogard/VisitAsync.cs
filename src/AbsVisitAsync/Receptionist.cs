@@ -6,6 +6,8 @@ namespace NsAbsVisitAsync
 
     using Cysharp.Threading.Tasks;
 
+    using NsAnyLR;
+
     /// <summary>
     /// A STATELESS helper object that associate the data and its visitor.
     /// </summary>
@@ -17,18 +19,6 @@ namespace NsAbsVisitAsync
             IVisitor<T> visitor,
             IVisitorFactory<T> factor,
             CancellationToken token = default);
-    }
-
-    public sealed class UnfoundReceptionist<T> : IReceptionist<T>
-    {
-        public UniTask<bool> AcceptAsync(
-                T data,
-                IVisitor<T> visitor,
-                IVisitorFactory<T> factory,
-                CancellationToken token = default)
-        {
-            throw new Exception();
-        }
     }
 
     public sealed class ReceptionistManager
@@ -48,12 +38,12 @@ namespace NsAbsVisitAsync
             );
         }
 
-        public IReceptionist<T> GetReceptionist<T>()
+        public Option<IReceptionist<T>> GetReceptionist<T>()
         {
             if (this.map_.TryGetValue(typeof(T), out var val) && val is IReceptionist<T> re)
-                return re;
+                return Option.Some(re);
             else
-                return new UnfoundReceptionist<T>();
+                return Option.None();
         }
     }
 }

@@ -6,6 +6,8 @@ And the generated code files will be placed into a single directory (`gen_visit`
 
 ## Usage
 
+Use this to scan the project from which the types will be added to the codegen context.
+
 ```
 dotnet run -- ../path_to.csproj
 ```

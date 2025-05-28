@@ -5,12 +5,13 @@
     using Cysharp.Threading.Tasks;
 
     using NsAbsVisitAsync;
+    using NsAnyLR;
 
     public static class ReceptionistInject
     {
         private static readonly ReceptionistManager manager_ = new ReceptionistManager();
 
-        public static IReceptionist<T> GetReceptionist<T>()
+        public static Option<IReceptionist<T>> GetReceptionist<T>()
             => manager_.GetReceptionist<T>();
 
         internal static void Register<T, R>() where R : class, IReceptionist<T>, new()

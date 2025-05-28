@@ -1,4 +1,4 @@
-namespace VisitAsyncUtils.CliTools
+namespace NsAbsVisitAsync.NsCliTools
 {
     using System;
     using System.Collections.Generic;
@@ -13,8 +13,6 @@ namespace VisitAsyncUtils.CliTools
     using Microsoft.CodeAnalysis.MSBuild;
     using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-    using VisitAsyncUtils;
-
     public sealed class ScanGen
     {
         private readonly MSBuildWorkspace workspace_;
@@ -28,7 +26,7 @@ namespace VisitAsyncUtils.CliTools
         private readonly CodeGenSettings codeGenSettings_;
 
         private ScanGen
-            ( MSBuildWorkspace workspace
+            (MSBuildWorkspace workspace
             , string projPath
             , Project project
             , ScanSettings scanSettings
@@ -42,7 +40,7 @@ namespace VisitAsyncUtils.CliTools
         }
 
         public static async Task<ScanGen> OpenAsync
-            ( string projPath
+            (string projPath
             , ScanSettings scanSettings
             , CodeGenSettings codeGenSettings)
         {
@@ -85,11 +83,7 @@ namespace VisitAsyncUtils.CliTools
                         if (symbol is null)
                             continue;
 
-                        // FIXME: 应改为由 CodeGenSettings 来生成这个 Scan 逻辑
-                        if (this.scanSettings_.IsAttributeRequired && symbol.GetAttributes().Any(a => a.AttributeClass?.Name == nameof(AllowVisitAttribute)))
-                            symbolsList.Add(symbol);
-                        else
-                            symbolsList.Add(symbol);
+                        symbolsList.Add(symbol);
                     }
                     if (symbolsList.Any())
                         symbols.Add(document, symbolsList);
@@ -105,11 +99,23 @@ namespace VisitAsyncUtils.CliTools
             if (projFolderPath is null)
                 throw new Exception($"Faield to get project folder path from projPath({this.projPath_})");
 
+            var codeGenFolderPath = $"{projFolderPath}{Path.DirectorySeparatorChar}{this.codeGenSettings_.CodeGenFolderName}";
+            var genFileNameSpace = $"{this.project_.Name}.NsGenVisit";
+            var injectTypeName = "ReceptionistInject";
+
             foreach (var kv in symbols)
             {
                 var document = kv.Key;
                 var symbolsList = kv.Value;
 
+                if (document.FilePath is string documentPathStr)
+                {
+                    if (documentPathStr.StartsWith(codeGenFolderPath) && documentPathStr.EndsWith(".gen.cs"))
+                    {
+                        Console.Out.WriteLine($"跳过生成文件: {documentPathStr}");
+                        continue;
+                    }
+                }
                 Console.WriteLine($"发现代码文件: {projFolderPath}{Path.DirectorySeparatorChar}{document.Name}");
 
                 foreach (var symbol in symbolsList)
@@ -123,9 +129,8 @@ namespace VisitAsyncUtils.CliTools
                 }
                 try
                 {
-                    var folderPath = $"{projFolderPath}{Path.DirectorySeparatorChar}{this.codeGenSettings_.CodeGenFolderName}";
-                    if (!Directory.Exists(folderPath))
-                        Directory.CreateDirectory(folderPath);
+                    if (!Directory.Exists(codeGenFolderPath))
+                        Directory.CreateDirectory(codeGenFolderPath);
 
                     if (document.FilePath is null)
                         throw new Exception($"Document(Name: {document.Name}) file path does not exists");
@@ -137,7 +142,7 @@ namespace VisitAsyncUtils.CliTools
                         .Replace('.', '_');
 
                     var genFileName = $"{documentId}.gen.cs";
-                    var absFilePath = $"{folderPath}{Path.DirectorySeparatorChar}{genFileName}";
+                    var absFilePath = $"{codeGenFolderPath}{Path.DirectorySeparatorChar}{genFileName}";
 
                     await Console.Out.WriteLineAsync($"正在为 {document.Name} 生成代码文件 {absFilePath} (documentId: {documentId})");
 
@@ -147,14 +152,16 @@ namespace VisitAsyncUtils.CliTools
                     File.WriteAllText(absFilePath, string.Empty);
 
                     /// Exclusively open file and write generated code into it.
-                    using var file = new FileStream(absFilePath, FileMode.Open, FileAccess.Write, FileShare.None);
+                    using var file = new FileStream(absFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
                     await GenerateFileLevelCodeAsync(
-                        this.codeGenSettings_,
-                        this.project_,
-                        documentId,
-                        file,
-                        document,
-                        symbolsList
+                        codeGenSettings: this.codeGenSettings_,
+                        project: this.project_,
+                        documentId: documentId,
+                        fileStream: file,
+                        document: document,
+                        genFileNameSpace: genFileNameSpace,
+                        injectTypeName: injectTypeName,
+                        symbolsList: symbolsList
                     );
                 }
                 catch (Exception e)
@@ -163,6 +170,13 @@ namespace VisitAsyncUtils.CliTools
                     throw;
                 }
             }
+
+            await GenerateInjectCodeAsync(
+                this.codeGenSettings_,
+                genFileNameSpace,
+                codeGenFolderPath,
+                injectTypeName
+            );
         }
 
         static async ValueTask GenerateFileLevelCodeAsync(
@@ -171,6 +185,8 @@ namespace VisitAsyncUtils.CliTools
             string documentId,
             FileStream fileStream,
             Document document,
+            string genFileNameSpace,
+            string injectTypeName,
             List<ISymbol> symbolsList)
         {
             try
@@ -184,7 +200,6 @@ namespace VisitAsyncUtils.CliTools
 ";
                 await fileStream.WriteAsync(topComment);
 
-                var genFileNameSpace = $"{project.Name}.GenVisit";
                 var nsLine = $"namespace {genFileNameSpace}\n{{\n";
                 await fileStream.WriteAsync(nsLine);
 
@@ -194,31 +209,61 @@ using System.Threading; // To use CancellationToken
 
 using {codeGenSettings.UsingLineStr}; 
 
-using VisitAsyncUtils;
+using NsAbsVisitAsync;
 
 ";
                 await fileStream.WriteAsync(usingLine);
+
+                var tab = codeGenSettings.TabStr;
+                var tab2 = $"{tab}{tab}";
 
                 foreach (var typeSymbol in symbolsList)
                 {
                     if (typeSymbol is not INamedTypeSymbol namedTypeSymbol)
                         throw new Exception($"Expect {nameof(INamedTypeSymbol)}, but {typeSymbol.GetType().FullName} encountered.");
 
-                    var extKlassPrefix = namedTypeSymbol.ToDisplayString().Replace('.', '_');
+                    var dataTypeFullName = namedTypeSymbol.ToDisplayString();
+                    var receptionistKlassSuffix = dataTypeFullName.Replace('.', '_');
+                    var genTypeName = $"Receptionist_{receptionistKlassSuffix}";
 
-                    var genExtensionName = $"{extKlassPrefix}_AcceptVisitExt";
-                    var extLine = $"public static class {genExtensionName}\n" + "{";
-                    await fileStream.WriteAsync(extLine);
+                    var clsDeclLine = $"public sealed class {genTypeName} : IReceptionist<{dataTypeFullName}>\n" + "{\n";
+                    await fileStream.WriteAsync(clsDeclLine);
+
+                    // Code gen for the static constructor of the receptionist class
+                    // static Receptionist_GenTypeName()
+                    //     => ReceptionistInject.Register<dataTypeFullName, Receptionist_GenTypeName>();
+                    if (true)
+                    {
+                        var ctorStaticDecl0 = $"static {genTypeName}()";
+                        var ctorStaticImpl0 = $"=> {injectTypeName}.Register<{dataTypeFullName}, {genTypeName}>();";
+
+                        await fileStream.WriteAsync($"{tab}{ctorStaticDecl0}\n");
+                        await fileStream.WriteAsync($"{tab}{tab}{ctorStaticImpl0}\n");
+                    }
+
+                    var methDecl0 = $"public async {codeGenSettings.TasksTypeStr} AcceptAsync(";
+                    var methDeclParamData = $"{dataTypeFullName} data,";
+                    var methDeclParamVisitor = $"IVisitor<{dataTypeFullName}> visitor,";
+                    var methDeclParamFactory = $"IVisitorFactory<{dataTypeFullName}> factory,";
+                    var methDeclParamToken = "CancellationToken token = default)";
+
+                    await fileStream.WriteAsync($"\n{tab}{methDecl0}\n");
+                    await fileStream.WriteAsync($"{tab2}{methDeclParamData}\n");
+                    await fileStream.WriteAsync($"{tab2}{methDeclParamVisitor}\n");
+                    await fileStream.WriteAsync($"{tab2}{methDeclParamFactory}\n");
+                    await fileStream.WriteAsync($"{tab2}{methDeclParamToken}\n");
+                    await fileStream.WriteAsync($"{tab}{{\n");
 
                     if (namedTypeSymbol.TypeKind == TypeKind.Interface || (namedTypeSymbol.TypeKind == TypeKind.Class && namedTypeSymbol.IsAbstract))
-                        await GenerateAbstractTypeSymbolCodeAsync(codeGenSettings, project, fileStream, document, namedTypeSymbol);
+                        await GenerateAbstractTypeSymbolCodeAsync(codeGenSettings, project, fileStream, document, namedTypeSymbol, genTypeName);
                     else
-                        await GenerateConcreteTypeSymbolCodeAsync(codeGenSettings, project, fileStream, document, namedTypeSymbol);
+                        await GenerateConcreteTypeSymbolCodeAsync(codeGenSettings, project, fileStream, document, namedTypeSymbol, genTypeName);
 
                     await fileStream.WriteAsync("}\n\n");
                     await fileStream.FlushAsync();
                 }
 
+                // Write the closing right brace of the namespace
                 await fileStream.WriteAsync("}\n\n");
             }
             catch (Exception e)
@@ -233,31 +278,23 @@ using VisitAsyncUtils;
             Project project,
             Stream ioStream,
             Document document,
-            INamedTypeSymbol namedTypeSymbol)
+            INamedTypeSymbol namedTypeSymbol,
+            string genTypeName)
         {
             var tab = codeGenSettings.TabStr;
+            var tab2 = $"{tab}{tab}";
             try
             {
-                var hostTypeFullName = namedTypeSymbol.ToDisplayString();
-
-                var commentLines = @$"{tab}/// <summary>
-{tab}/// {tab}Generated extension method to allow visitor accessing to the members of <c>{hostTypeFullName}</c> declared in the source file <c>{document.Name}</c>.
-{tab}/// </summary>";
-
-                var extFnDecl0 = $"public static async {codeGenSettings.TasksTypeStr} AcceptAsync<F, V>(this {hostTypeFullName} host, F factory, CancellationToken token = default)";
-                var extFnDeclF = $"where F : IVisitorFactory<{hostTypeFullName}, V>";
-                var extFnDeclV = $"where V : IVisitor<{hostTypeFullName}>";
-
-                var declLine = $"\n{commentLines}\n{tab}{extFnDecl0}\n{tab}{tab}{extFnDeclF}\n{tab}{tab}{extFnDeclV}\n{tab}" + "{\n";
-                await ioStream.WriteAsync(declLine);
-
+                var dataTypeFullName = namedTypeSymbol.ToDisplayString();
                 var members = namedTypeSymbol.GetVisitableMembers();
-                if (members.Any())
+                var memberCount = unchecked((uint)members.Count());
+                if (memberCount > 0u)
                 {
-                    var declUsingLine = $"{tab}{tab}using var visitor = await factory.GetVisitorAsync(host, token);\n\n";
-                    await ioStream.WriteAsync(declUsingLine);
                     foreach (var member in namedTypeSymbol.GetVisitableMembers())
-                        await GenerateMemberSymbolCodeAsync(codeGenSettings, ioStream, namedTypeSymbol, member);
+                    {
+                        await GenerateMemberSymbolCodeAsync(codeGenSettings, ioStream, namedTypeSymbol, member, memberCount);
+                        memberCount -= 1u;
+                    }
                 }
                 else
                     await GenerateCodeForEmptyTypeSymbolAsync(codeGenSettings, ioStream, namedTypeSymbol);
@@ -277,7 +314,8 @@ using VisitAsyncUtils;
             Project project,
             Stream ioStream,
             Document document,
-            INamedTypeSymbol namedTypeSymbol)
+            INamedTypeSymbol namedTypeSymbol,
+            string genTypeName)
         {
             static async ValueTask<List<INamedTypeSymbol>> FindImplementationsAsync(
                 Project project,
@@ -337,42 +375,28 @@ using VisitAsyncUtils;
             var tab2 = $"{tab}{tab}";
             try
             {
-                var hostTypeFullName = namedTypeSymbol.ToDisplayString();
-                var hostVarName = "host";
-
-                var commentLines = @$"{tab}/// <summary>
-{tab}/// {tab}Generated extension method to allow visitor accessing to the derivative types of <c>{hostTypeFullName}</c> declared in the project <c>{document.Name}</c>.
-{tab}/// </summary>";
-
-                var extFnDecl0 = $"public static async {codeGenSettings.TasksTypeStr} AcceptAsync<F, V>(this {hostTypeFullName} {hostVarName}, F factory, CancellationToken token = default)";
-                var extFnDeclF = $"where F : IVisitorFactory<{hostTypeFullName}, V>";
-                var extFnDeclV = $"where V : IVisitor<{hostTypeFullName}>";
-
-                var declLine = $"\n{commentLines}\n{tab}{extFnDecl0}\n{tab}{tab}{extFnDeclF}\n{tab}{tab}{extFnDeclV}\n{tab}" + "{\n";
-                await ioStream.WriteAsync(declLine);
-
+                var dataVarName = "data";
+                var factoryName = "factory";
                 var implementations = await FindImplementationsAsync(project, namedTypeSymbol);
                 if (!implementations.Any())
                 {
                     await GenerateCodeForEmptyTypeSymbolAsync(codeGenSettings, ioStream, namedTypeSymbol);
                     return;
                 }
-                var factorNewName = "re";
+                else
                 {
-                    var factoryCast = $"if (factory is not {nameof(IRebindableVisitorFactory)} {factorNewName})";
-                    var braceBegin = "{";
-                    var factoryErrL1 = $"var m = $\"Not rebindable factory type ({{factory.GetType()}}) when visiting {{typeof({hostTypeFullName})}}\";";
-                    var factoryErrL2 = "throw new NotSupportedException(m);";
-                    var braceEnd = "}";
-                    var castErrLine = $"\n{tab2}{factoryCast}\n{tab2}{braceBegin}\n{tab2}{tab}{factoryErrL1}\n{tab2}{tab}{factoryErrL2}\n{tab2}{braceEnd}";
-                    await ioStream.WriteAsync(castErrLine);
+                    var count = unchecked((uint)implementations.Count());
+                    foreach (var subTypeSymbol in implementations)
+                    {
+                        await GenerateSubTypeSymbolCodeAsync(codeGenSettings, ioStream, subTypeSymbol, dataVarName, factoryName, count);
+                        count -= 1u;
+                    }
                 }
-                foreach (var subTypeSymbol in implementations)
-                    await GenerateSubTypeSymbolCodeAsync(codeGenSettings, ioStream, subTypeSymbol, hostVarName, factorNewName);
                 if (true)
                 {
+                    var dataTypeFullName = namedTypeSymbol.ToDisplayString();
                     var braceBegin = "{";
-                    var initErrMsg = $"var m = $\"Unsupported type {{{hostVarName}.GetType()}} encountered when visiting {{typeof({hostTypeFullName})}}\";";
+                    var initErrMsg = $"var m = $\"Unsupported type {{{dataVarName}.GetType()}} encountered when visiting {{typeof({dataTypeFullName})}}\";";
                     var stmtThrow = "throw new NotSupportedException(m);";
                     var braceEnd = "}";
                     var enclosingElseStmt = $"\n{tab2}else\n{tab2}{braceBegin}\n{tab2}{tab}{initErrMsg}\n{tab2}{tab}{stmtThrow}\n{tab2}{braceEnd}\n{tab}{braceEnd}\n";
@@ -390,16 +414,30 @@ using VisitAsyncUtils;
             CodeGenSettings codeGenSettings,
             Stream ioStream,
             INamedTypeSymbol namedTypeSymbol,
-            ISymbol memberSymbol)
+            ISymbol memberSymbol,
+            uint memberSymbolsCount)
         {
             var tab = codeGenSettings.TabStr;
+            var tab2 = $"{tab}{tab}";
             try
             {
-                var visitLine = $"bool visit_{memberSymbol.Name}_Succeeded = await visitor.VisitAsync(host.{memberSymbol.Name}, nameof(host.{memberSymbol.Name}), token);";
+                var visitorDeclName = $"visitor_{memberSymbol.Name}";
+                var memberTypeSymbol = memberSymbol switch
+                {
+                    IFieldSymbol fieldSymbol => fieldSymbol.Type,
+                    IPropertySymbol propertySymbol => propertySymbol.Type,
+                    _ => throw new Exception($"unsupported symbol type {memberSymbol.GetType()}"),
+                };
+                var memberTypeFullName = memberTypeSymbol.ToDisplayString();
+                var visitorDecl = $"using var {visitorDeclName} = await factory.GetItemVisitorAsync<{memberTypeFullName}>(visitor, {memberSymbolsCount}u, \"{memberSymbol.Name}\", token);";
+                var visitLine = $"bool visit_{memberSymbol.Name}_Succeeded = await {visitorDeclName}.VisitAsync(data.{memberSymbol.Name}, token);";
                 var judgeLine = $"if (!visit_{memberSymbol.Name}_Succeeded)";
                 var retLine = "return false;";
-                var stmt = $"{tab}{tab}{visitLine}\n{tab}{tab}{judgeLine}\n{tab}{tab}{tab}{retLine}\n\n";
-                await ioStream.WriteAsync(stmt);
+
+                await ioStream.WriteAsync($"{tab2}{visitorDecl}\n");
+                await ioStream.WriteAsync($"{tab2}{visitLine}\n");
+                await ioStream.WriteAsync($"{tab2}{judgeLine}\n");
+                await ioStream.WriteAsync($"{tab2}{tab}{retLine}\n");
             }
             catch (Exception e)
             {
@@ -412,21 +450,22 @@ using VisitAsyncUtils;
             CodeGenSettings codeGenSettings,
             Stream ioStream,
             INamedTypeSymbol subTypeSymbol,
-            string host,
-            string rebind)
+            string dataVarName,
+            string factoryName,
+            uint variantsCount)
         {
             var tab = codeGenSettings.TabStr;
             var tab2 = $"{tab}{tab}";
             var subTypeFullName = subTypeSymbol.ToDisplayString();
             var subTypeShortName = subTypeSymbol.Name;
-            var hostNewName = $"x_{subTypeShortName}";
-            var factoryNewName = $"f_{subTypeShortName}";
+            var dataVarNewName = $"x_{subTypeShortName}";
+            var visitorVarName = $"visitor_{subTypeShortName}";
             try
             {
-                var hostCast = $"if ({host} is {subTypeFullName} {hostNewName})";
+                var hostCast = $"if ({dataVarName} is {subTypeFullName} {dataVarNewName})";
                 var braceBegin = "{";
-                var l1 = $"var {factoryNewName} = await {rebind}.GetFactoryAsync<{subTypeFullName}, IVisitor<{subTypeFullName}>>(token);";
-                var l2 = $"return await {hostNewName}.AcceptAsync<IVisitorFactory<{subTypeFullName}, IVisitor<{subTypeFullName}>>, IVisitor<{subTypeFullName}>>({factoryNewName}, token);";
+                var l1 = $"using var {visitorVarName} = await {factoryName}.GetVariantVisitorAsync<{subTypeFullName}>(visitor, {variantsCount}u, token);";
+                var l2 = $"return await {visitorVarName}.VisitAsync({dataVarNewName}, token);";
                 var braceEnd = "}";
                 var castErrLine = $"\n{tab2}{hostCast}\n{tab2}{braceBegin}\n{tab2}{tab}{l1}\n{tab2}{tab}{l2}\n{tab2}{braceEnd}";
                 await ioStream.WriteAsync(castErrLine);
@@ -448,6 +487,48 @@ using VisitAsyncUtils;
             var visitLine = "await System.Threading.Tasks.Task.CompletedTask;";
             var stmt = $"{tab}{tab}{commentLine}\n{tab}{tab}{visitLine}\n";
             await ioStream.WriteAsync(stmt);
+        }
+
+        static async ValueTask GenerateInjectCodeAsync(
+            CodeGenSettings codeGenSettings,
+            string genFileNameSpace,
+            string codeGenFolderPath,
+            string injectTypeName)
+        {
+            var tab = codeGenSettings.TabStr;
+            var tab2 = $"{tab}{tab}";
+
+            var genFileName = $"{injectTypeName}.gen.cs";
+            var absFilePath = $"{codeGenFolderPath}{Path.DirectorySeparatorChar}{genFileName}";
+            try
+            {
+                using var file = new FileStream(absFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
+                var code =
+@$"namespace {genFileNameSpace}
+{{
+    using NsAnyLR;
+    using NsAbsVisitAsync;
+
+    public static class {injectTypeName}
+    {{
+        private static readonly NsAbsVisitAsync.ReceptionistManager manager_ = new ReceptionistManager();
+
+        public static Option<IReceptionist<T>> GetReceptionist<T>()
+            => manager_.GetReceptionist<T>();
+
+        internal static void Register<T, R>() where R : class, IReceptionist<T>, new()
+            => manager_.RegisterReceptionist<T, R>();
+    }}
+}}
+";
+                await file.WriteAsync(code);
+                await file.FlushAsync();
+            }
+            catch (Exception e)
+            {
+                await Console.Out.WriteLineAsync($"{e}");
+                throw;
+            }
         }
     }
 
@@ -483,8 +564,7 @@ using VisitAsyncUtils;
                 from m in symbol.GetMembers()
                 where m.DeclaredAccessibility == Accessibility.Public &&
                     !m.IsStatic &&
-                    (m.Kind == SymbolKind.Field || m.Kind == SymbolKind.Property) &&
-                    !m.GetAttributes().Any(a => a.AttributeClass?.Name == nameof(IgnoreVisitAttribute))
+                    (m.Kind == SymbolKind.Field || m.Kind == SymbolKind.Property)
                 select m;
         }
     }

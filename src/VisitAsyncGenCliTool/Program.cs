@@ -1,4 +1,4 @@
-﻿namespace VisitAsyncUtils.CliTools
+﻿namespace NsAbsVisitAsync.NsCliTools
 {
     using System;
     using System.Threading.Tasks;
