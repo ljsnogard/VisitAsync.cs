@@ -241,7 +241,7 @@ using NsAbsVisitAsync;
                         await fileStream.WriteAsync($"{tab}{tab}{ctorStaticImpl0}\n");
                     }
 
-                    var methDecl0 = $"public async {codeGenSettings.TasksTypeStr} AcceptAsync(";
+                    var methDecl0 = $"public async {codeGenSettings.TasksTypeStr} ReceptAsync(";
                     var methDeclParamData = $"{dataTypeFullName} data,";
                     var methDeclParamVisitor = $"IVisitor<{dataTypeFullName}> visitor,";
                     var methDeclParamFactory = $"IVisitorFactory<{dataTypeFullName}> factory,";
@@ -429,7 +429,7 @@ using NsAbsVisitAsync;
                     _ => throw new Exception($"unsupported symbol type {memberSymbol.GetType()}"),
                 };
                 var memberTypeFullName = memberTypeSymbol.ToDisplayString();
-                var visitorDecl = $"using var {visitorDeclName} = await factory.GetItemVisitorAsync<{memberTypeFullName}>(visitor, {memberSymbolsCount}u, \"{memberSymbol.Name}\", token);";
+                var visitorDecl = $"using var {visitorDeclName} = await factory.GetMemberVisitorAsync<{memberTypeFullName}>(visitor, {memberSymbolsCount}u, \"{memberSymbol.Name}\", token);";
                 var visitLine = $"bool visit_{memberSymbol.Name}_Succeeded = await {visitorDeclName}.VisitAsync(data.{memberSymbol.Name}, token);";
                 var judgeLine = $"if (!visit_{memberSymbol.Name}_Succeeded)";
                 var retLine = "return false;";

@@ -1,7 +1,7 @@
 namespace NsAbsVisitAsync
 {
     using System;
-    using System.Collections.Concurrent;
+    using System.Collections.Generic;
     using System.Threading;
 
     using Cysharp.Threading.Tasks;
@@ -9,41 +9,69 @@ namespace NsAbsVisitAsync
     using NsAnyLR;
 
     /// <summary>
-    /// A STATELESS helper object that associate the data and its visitor.
+    /// A STATELESS helper object that guides the visitor to traval through the
+    /// internal structure (fields, properties) of the data.
     /// </summary>
     /// <typeparam name="T"></typeparam>
     public interface IReceptionist<T>
     {
-        public UniTask<bool> AcceptAsync(
+        public UniTask<bool> ReceptAsync(
             T data,
             IVisitor<T> visitor,
-            IVisitorFactory<T> factor,
-            CancellationToken token = default);
+            IVisitorProvider provider,
+            CancellationToken token = default
+        );
     }
 
     public sealed class ReceptionistManager
     {
-        private readonly ConcurrentDictionary<Type, object> map_;
+        private readonly SemaphoreSlim sema_;
+        private readonly Dictionary<Type, object> map_;
 
         public ReceptionistManager()
-            => this.map_ = new();
-
-        public void RegisterReceptionist<T, R>()
-            where R : class, IReceptionist<T>, new()
         {
-            this.map_.AddOrUpdate(
-                typeof(T),
-                new R(),
-                (k, v) => new R()
-            );
+            this.sema_ = new(1, 1);
+            this.map_ = new();
         }
 
-        public Option<IReceptionist<T>> GetReceptionist<T>()
+        public async UniTask<bool> RegisterAsync<T, R>(bool shouldReplace = false, CancellationToken token = default)
+            where R : IReceptionist<T>, new()
         {
-            if (this.map_.TryGetValue(typeof(T), out var val) && val is IReceptionist<T> re)
-                return Option.Some(re);
-            else
-                return Option.None();
+            try
+            {
+                await this.sema_.WaitAsync(token);
+                var key = typeof(T);
+                if (shouldReplace)
+                    this.map_.Remove(key);
+                var hasExisting = this.map_.TryGetValue(typeof(T), out var recept);
+                if (hasExisting)
+                    return false;
+                this.map_.Add(key, new R());
+                return true;
+            }
+            finally
+            {
+                if (this.sema_.CurrentCount == 0)
+                    this.sema_.Release();
+            }
+        }
+
+        public async UniTask<Option<IReceptionist<T>>> GetAsync<T>(CancellationToken token = default)
+        {
+            try
+            {
+                await this.sema_.WaitAsync(token);
+                var key = typeof(T);
+                if (this.map_.TryGetValue(key, out var val) && val is IReceptionist<T> re)
+                    return Option.Some(re);
+                else
+                    return Option.None();
+            }
+            finally
+            {
+                if (this.sema_.CurrentCount == 0)
+                    this.sema_.Release();
+            }
         }
     }
 }

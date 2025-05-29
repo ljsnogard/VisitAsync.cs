@@ -2,8 +2,6 @@
 {
     using System.Collections.Generic;
 
-    using VisitAsyncUtils;
-
     public struct SampleStruct
     {
         public List<(string, System.Type)> Properties { get; set; }
@@ -17,7 +15,6 @@
         {
             public LinkedList<uint> SampleProperty { get; }
 
-            [IgnoreVisit]
             public nuint SeenButNotVisitible { get; }
 
             public SampleClass(LinkedList<uint> sampleProperty)
