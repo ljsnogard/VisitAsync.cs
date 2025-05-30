@@ -47,24 +47,24 @@
         }
     }
 
-    public readonly struct Weaver_SampleGenVisit_SampleStruct : IWeaver<SampleGenVisit.SampleStruct>
+    public readonly struct Builder_SampleGenVisit_SampleStruct : IBuilder<SampleGenVisit.SampleStruct>
     {
-        public async UniTask<Result<SampleGenVisit.SampleStruct, IBuilderError>> TryWeaveAsync(
-            IBuilder<SampleGenVisit.SampleStruct> builder,
-            IBuilderProvider<SampleGenVisit.SampleStruct> provider,
+        public async UniTask<Result<SampleGenVisit.SampleStruct, IParserError>> TryBuildAsync(
+            IParser<SampleGenVisit.SampleStruct> parser,
+            IParserProvider provider,
             CancellationToken token = default)
         {
-            using var builder_Properties = await provider.GetMemberBuilderAsync<List<(string, System.Type)>>(builder, 2u, "Properties", token);
-            var build_Properties_result = await builder_Properties.TryBuildAsync(token);
+            using var builder_Properties = await provider.GetMemberParserAsync<SampleGenVisit.SampleStruct, List<(string, System.Type)>>(parser, 2u, "Properties", token);
+            var build_Properties_result = await builder_Properties.TryParseAsync(token);
             if (build_Properties_result.IsErr(out var build_Propertis_error))
                 return Result.Err(build_Propertis_error);
 
-            using var builder_CanonicalName = await provider.GetMemberBuilderAsync<string>(builder, 1u, "CanonicalName", token);
-            var build_CanonicalName_result = await builder_CanonicalName.TryBuildAsync(token);
+            using var builder_CanonicalName = await provider.GetMemberParserAsync<SampleGenVisit.SampleStruct, string>(parser, 1u, "CanonicalName", token);
+            var build_CanonicalName_result = await builder_CanonicalName.TryParseAsync(token);
             if (build_CanonicalName_result.IsErr(out var build_CanonicalName_error))
                 return Result.Err(build_CanonicalName_error);
 
-            return await builder.TryBuildAsync(token);
+            return await parser.TryParseAsync(token);
         }
     }
 
@@ -119,25 +119,25 @@
         }
     }
 
-    public readonly struct Weaver_SampleGenVisit_ISampleInterface : IWeaver<SampleGenVisit.ISampleInterface>
+    public readonly struct Builder_SampleGenVisit_ISampleInterface : IBuilder<SampleGenVisit.ISampleInterface>
     {
-        static async UniTask<Result<SampleGenVisit.ISampleInterface, IBuilderError>> B0(
-            IBuilder<SampleGenVisit.ISampleInterface> builder,
-            IBuilderProvider<SampleGenVisit.ISampleInterface> provider,
+        static async UniTask<Result<SampleGenVisit.ISampleInterface, IParserError>> B0(
+            IParser<SampleGenVisit.ISampleInterface> parser,
+            IParserProvider provider,
             CancellationToken token = default)
         {
-            using var builder_SampleStruct = await provider.GetVariantBuilderAsync<SampleGenVisit.SampleStruct>(builder, token);
-            var build_SampleStruct_result = await builder_SampleStruct.TryBuildAsync(token);
+            using var builder_SampleStruct = await provider.GetVariantParserAsync<SampleGenVisit.ISampleInterface, SampleGenVisit.SampleStruct>(parser, token);
+            var build_SampleStruct_result = await builder_SampleStruct.TryParseAsync(token);
             return build_SampleStruct_result.MapOk(x => x as SampleGenVisit.ISampleInterface);
         }
 
-        static async UniTask<Result<SampleGenVisit.ISampleInterface, IBuilderError>> B1(
-            IBuilder<SampleGenVisit.ISampleInterface> builder,
-            IBuilderProvider<SampleGenVisit.ISampleInterface> provider,
+        static async UniTask<Result<SampleGenVisit.ISampleInterface, IParserError>> B1(
+            IParser<SampleGenVisit.ISampleInterface> builder,
+            IParserProvider provider,
             CancellationToken token = default)
         {
-            using var builder_AnotherClass = await provider.GetVariantBuilderAsync<SampleGenVisit.AnotherClass>(builder, token);
-            var build_AnotherClass_result = await builder_AnotherClass.TryBuildAsync(token);
+            using var builder_AnotherClass = await provider.GetVariantParserAsync<SampleGenVisit.ISampleInterface, SampleGenVisit.AnotherClass>(builder, token);
+            var build_AnotherClass_result = await builder_AnotherClass.TryParseAsync(token);
             return build_AnotherClass_result.MapOk(x => x as SampleGenVisit.ISampleInterface);
         }
 
@@ -146,9 +146,9 @@
             typeof(SampleGenVisit.AnotherClass)
         ]);
 
-        public async UniTask<Result<SampleGenVisit.ISampleInterface, IBuilderError>> TryWeaveAsync(
-            IBuilder<SampleGenVisit.ISampleInterface> builder,
-            IBuilderProvider<SampleGenVisit.ISampleInterface> factory,
+        public async UniTask<Result<SampleGenVisit.ISampleInterface, IParserError>> TryBuildAsync(
+            IParser<SampleGenVisit.ISampleInterface> builder,
+            IParserProvider factory,
             CancellationToken token = default)
         {
             var result = await builder.GetVariantTypeAsync(VARIANT_TYPES, token);

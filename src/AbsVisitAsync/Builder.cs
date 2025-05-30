@@ -1,38 +1,21 @@
 namespace NsAbsVisitAsync
 {
-    using System;
     using System.Threading;
 
     using Cysharp.Threading.Tasks;
 
     using NsAnyLR;
 
-    public interface IBuilderError
+    /// <summary>
+    /// A builder knows how to create an object upon the different types of
+    /// data from the parsers under the builder's direction.
+    /// </summary>
+    /// <typeparam name="T">The data type to build</typeparam>
+    public interface IBuilder<T>
     {
-        public Exception AsException();
-    }
-
-    public interface IBuilder<T> : IDisposable
-    {
-        public UniTask<Result<T, IBuilderError>> TryBuildAsync(CancellationToken token = default);
-
-        public UniTask<Result<uint, IBuilderError>> GetVariantTypeAsync(
-            ReadOnlyMemory<Type> variantTypes,
-            CancellationToken token = default
-        );
-    }
-
-    public interface IBuilderProvider<T>
-    {
-        public UniTask<IBuilder<U>> GetMemberBuilderAsync<U>(
-            IBuilder<T> parent,
-            uint remainingMemberCount,
-            string key,
-            CancellationToken token = default
-        );
-
-        public UniTask<IBuilder<U>> GetVariantBuilderAsync<U>(
-            IBuilder<T> parent,
+        public UniTask<Result<T, IParserError>> TryBuildAsync(
+            IParser<T> parser,
+            IParserProvider provider,
             CancellationToken token = default
         );
     }

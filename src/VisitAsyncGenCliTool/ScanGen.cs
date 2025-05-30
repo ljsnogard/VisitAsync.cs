@@ -165,7 +165,7 @@ namespace NsAbsVisitAsync.NsCliTools
                     File.WriteAllText(absFilePath, string.Empty);
 
                     /// Exclusively open file and write generated code into it.
-                    using var file = new FileStream(absFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
+                    using var file = new FileStream(absFilePath, FileMode.Open, FileAccess.Write, FileShare.None);
                     await GenerateFileLevelCodeAsync(
                         codeGenSettings: this.codeGenSettings_,
                         project: this.project_,
@@ -559,7 +559,8 @@ using NsAbsVisitAsync;
             var absFilePath = $"{codeGenFolderPath}{Path.DirectorySeparatorChar}{genFileName}";
             try
             {
-                using var file = new FileStream(absFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
+                File.WriteAllText(absFilePath, string.Empty);
+                using var file = new FileStream(absFilePath, FileMode.Open, FileAccess.Write, FileShare.None);
                 var code =
 @$"namespace {genFileNameSpace}
 {{
