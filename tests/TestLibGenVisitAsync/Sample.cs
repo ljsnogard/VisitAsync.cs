@@ -24,6 +24,19 @@
             }
         }
 
+        internal sealed class AnInternalClass : ISampleInterface
+        {
+            public string MyName { get; set; }
+
+            public ISampleInterface Neighbour { get; set; }
+
+            public AnInternalClass(string myName, ISampleInterface neighbour)
+            {
+                this.MyName = myName;
+                this.Neighbour = neighbour;
+            }
+        }
+
         public interface ISampleInterface
         {
             public string MyName { get; }

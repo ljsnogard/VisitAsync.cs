@@ -14,14 +14,14 @@
         public static UniTask<Option<IReceptionist<T>>> GetAsync<T>(CancellationToken token = default)
             => manager_.GetAsync<T>(token);
 
-        internal static UniTask<bool> RegisterAsync<T, R>() where R : IReceptionist<T>, new()
-            => manager_.RegisterAsync<T, R>();
+        internal static UniTask<bool> RegisterAsync<T, R>(CancellationToken token = default) where R : IReceptionist<T>, new()
+            => manager_.RegisterAsync<T, R>(false, token);
     }
 
     public readonly struct Receptionist_SampleGenVisit_SampleStruct : IReceptionist<SampleGenVisit.SampleStruct>
     {
         static Receptionist_SampleGenVisit_SampleStruct()
-            => ReceptionistInject.RegisterAsync<SampleGenVisit.SampleStruct, Receptionist_SampleGenVisit_SampleStruct>().AsTask().Wait();
+            => ReceptionistInject.RegisterAsync<SampleGenVisit.SampleStruct, Receptionist_SampleGenVisit_SampleStruct>().Forget();
 
         public async UniTask<bool> ReceptAsync(
             SampleGenVisit.SampleStruct data,
@@ -123,20 +123,20 @@
     {
         static async UniTask<Result<SampleGenVisit.ISampleInterface, IBuilderError>> B0(
             IBuilder<SampleGenVisit.ISampleInterface> builder,
-            IBuilderProvider<SampleGenVisit.ISampleInterface> factory,
+            IBuilderProvider<SampleGenVisit.ISampleInterface> provider,
             CancellationToken token = default)
         {
-            using var builder_SampleStruct = await factory.GetVariantBuilderAsync<SampleGenVisit.SampleStruct>(builder, token);
+            using var builder_SampleStruct = await provider.GetVariantBuilderAsync<SampleGenVisit.SampleStruct>(builder, token);
             var build_SampleStruct_result = await builder_SampleStruct.TryBuildAsync(token);
             return build_SampleStruct_result.MapOk(x => x as SampleGenVisit.ISampleInterface);
         }
 
         static async UniTask<Result<SampleGenVisit.ISampleInterface, IBuilderError>> B1(
             IBuilder<SampleGenVisit.ISampleInterface> builder,
-            IBuilderProvider<SampleGenVisit.ISampleInterface> factory,
+            IBuilderProvider<SampleGenVisit.ISampleInterface> provider,
             CancellationToken token = default)
         {
-            using var builder_AnotherClass = await factory.GetVariantBuilderAsync<SampleGenVisit.AnotherClass>(builder, token);
+            using var builder_AnotherClass = await provider.GetVariantBuilderAsync<SampleGenVisit.AnotherClass>(builder, token);
             var build_AnotherClass_result = await builder_AnotherClass.TryBuildAsync(token);
             return build_AnotherClass_result.MapOk(x => x as SampleGenVisit.ISampleInterface);
         }
