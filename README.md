@@ -4,11 +4,11 @@
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ljsnogard/VisitAsync.cs)
 
-### src\AbsVisitAsync
+### src/AbsVisitAsync
 
 An abstract library defines the interfaces including `IVisitor<T>`, `IReceptionist<T>`, `IParser<T>`, `IBuilder<T>`.
 
-### src\VisitAsyncGenCliTool
+### src/VisitAsyncGenCliTool
 
 #### Intro
 
@@ -21,7 +21,7 @@ And the builder types are to guide the parsers extracting primitive data items t
 The tool will scan the whole project for types that need to generate code for.  
 They must be `public`, non-`static`.
 
-And the generated code files will be placed into a single directory (`gen_visit` for default).  
+And the generated code files will be placed into a single directory (`gen_visit` for now).  
 
 #### Usage
 
@@ -31,11 +31,11 @@ Use this to scan the project from which the types will be added to the codegen c
 dotnet run -- ../path_to.csproj
 ```
 
-### demo\SamplGenVisit
+### demo/SamplGenVisit
 
 The hand-written code that shows what will be generate.
 
-### tests\TestLibGenVisitAsync
+### tests/TestLibGenVisitAsync
 
 The playground for the developing code gen tool to debug and see what are actually generated.
 

@@ -1,6 +1,7 @@
 namespace NsAbsVisitAsync.NsCliTools
 {
     using System;
+    using Microsoft.CodeAnalysis;
 
     public sealed class ScanSettings
     {
@@ -56,8 +57,11 @@ namespace NsAbsVisitAsync.NsCliTools
         public string UsingLineStr
             => this.usingLineStr_;
 
-        public string TasksTypeStr
+        public string TasksTypeStr_Receptionist
             => this.tasksTypeStr_;
+
+        public string GetTaskTypeStr_Builder(string retTypeName)
+            => this.tasksTypeOpts_.GetTaskTypeStr(retTypeName);
 
         public string TabStr
             => this.tabStr_;

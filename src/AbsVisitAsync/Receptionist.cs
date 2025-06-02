@@ -23,55 +23,25 @@ namespace NsAbsVisitAsync
         );
     }
 
+    /// <summary>
+    /// A manager for type-specific receptionist singleton.
+    /// </summary>
     public sealed class ReceptionistManager
     {
-        private readonly SemaphoreSlim sema_;
-        private readonly Dictionary<Type, object> map_;
+        private readonly TypedSingletonAsyncDict dict_;
 
         public ReceptionistManager()
+            => this.dict_ = new();
+
+        public UniTask<bool> RegisterAsync<T, R>(
+                bool shouldReplace = false,
+                CancellationToken token = default)
+            where R : class, IReceptionist<T>, new()
         {
-            this.sema_ = new(1, 1);
-            this.map_ = new();
+            return this.dict_.RegisterAsync<T, R>(shouldReplace, token);
         }
 
-        public async UniTask<bool> RegisterAsync<T, R>(bool shouldReplace = false, CancellationToken token = default)
-            where R : IReceptionist<T>, new()
-        {
-            try
-            {
-                await this.sema_.WaitAsync(token);
-                var key = typeof(T);
-                if (shouldReplace)
-                    this.map_.Remove(key);
-                var hasExisting = this.map_.TryGetValue(typeof(T), out var recept);
-                if (hasExisting)
-                    return false;
-                this.map_.Add(key, new R());
-                return true;
-            }
-            finally
-            {
-                if (this.sema_.CurrentCount == 0)
-                    this.sema_.Release();
-            }
-        }
-
-        public async UniTask<Option<IReceptionist<T>>> GetAsync<T>(CancellationToken token = default)
-        {
-            try
-            {
-                await this.sema_.WaitAsync(token);
-                var key = typeof(T);
-                if (this.map_.TryGetValue(key, out var val) && val is IReceptionist<T> re)
-                    return Option.Some(re);
-                else
-                    return Option.None();
-            }
-            finally
-            {
-                if (this.sema_.CurrentCount == 0)
-                    this.sema_.Release();
-            }
-        }
+        public UniTask<Option<IReceptionist<T>>> GetAsync<T>(CancellationToken token = default)
+            => this.dict_.GetAsync(TypedSingletonAsyncDict.TryType<IReceptionist<T>>, token);
     }
 }

@@ -1,8 +1,5 @@
 namespace Sample2
 {
-    using VisitAsyncUtils;
-
-    [AllowVisit]
     public sealed class MySample
     {
         public int A1 { get; set; }

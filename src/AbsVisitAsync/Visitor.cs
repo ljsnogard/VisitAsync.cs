@@ -7,7 +7,10 @@
 
     public interface IVisitor<T> : IDisposable
     {
-        public UniTask<bool> VisitAsync(T data, CancellationToken token = default);
+        public UniTask<bool> VisitAsync(
+            T data,
+            CancellationToken token = default
+        );
     }
 
     public interface IVisitorProvider

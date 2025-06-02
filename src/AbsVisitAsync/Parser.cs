@@ -24,8 +24,8 @@ namespace NsAbsVisitAsync
 
         /// <summary>
         /// The parser knows the data type, but the builder might not need it.
-        /// So put some guesses and let the parser tell the caller whether the 
-        /// correct answer is among them.
+        /// So put some guesses and let the parser tell the builder whether the 
+        /// correct answer is among the options.
         /// </summary>
         /// <param name="variantTypes">The guessing types.</param>
         /// <param name="token"></param>
