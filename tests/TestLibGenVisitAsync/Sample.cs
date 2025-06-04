@@ -1,10 +1,13 @@
 ﻿namespace Sample
 {
+    using System;
     using System.Collections.Generic;
 
     public struct SampleStruct
     {
         public List<(string, System.Type)> Properties { get; set; }
+
+        public ValueTuple<string, System.Type>[] Names { get; set;  }
 
         public string CanonicalName { get; set; }
     }

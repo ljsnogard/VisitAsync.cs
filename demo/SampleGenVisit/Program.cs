@@ -48,9 +48,10 @@
             CancellationToken token = default)
         {
             using var visitor_Properties = await provider.GetMemberVisitorAsync<SampleGenVisit.SampleStruct, List<(string, System.Type)>>(visitor, 2u, nameof(SampleGenVisit.SampleStruct.Properties), token);
-            var opt_receptionist_Properties = await ReceptionistInject.GetAsync<List<(string, System.Type)>>(token);
-            if (!opt_receptionist_Properties.IsSome(out var receptionist_Properties))
-                return false;
+            var receptionist_Properties = new ListReceptionist<List<(string, System.Type)>, (string, System.Type)>();
+            // var opt_receptionist_Properties = await ReceptionistInject.GetAsync<List<(string, System.Type)>>(token);
+            // if (!opt_receptionist_Properties.IsSome(out var receptionist_Properties))
+            //     return false;
             if (!await receptionist_Properties.ReceptAsync(data.Properties, visitor_Properties, provider, token))
                 return false;
 

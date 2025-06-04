@@ -16,8 +16,9 @@ namespace NsAbsVisitAsync.NsCliTools
 
     using SymbolsDictionary = System.Collections.Immutable.ImmutableDictionary<
         Microsoft.CodeAnalysis.Document,
-        System.Collections.Immutable.ImmutableList<Microsoft.CodeAnalysis.INamedTypeSymbol>
+        System.Collections.Immutable.ImmutableList<Microsoft.CodeAnalysis.ITypeSymbol>
     >;
+    using System.Diagnostics.CodeAnalysis;
 
     public sealed class ScanGen
     {
@@ -68,7 +69,7 @@ namespace NsAbsVisitAsync.NsCliTools
             SymbolsDictionary symbols;
             try
             {
-                var buildingSymbols = new Dictionary<Document, ImmutableList<INamedTypeSymbol>>();
+                var buildingSymbols = new Dictionary<Document, ImmutableList<ITypeSymbol>>();
                 foreach (var document in this.project_.Documents)
                 {
                     if (document.FilePath is string documentPathStr)
@@ -81,7 +82,7 @@ namespace NsAbsVisitAsync.NsCliTools
                     }
                     Console.WriteLine($"发现代码文件: {projFolderPath}{Path.DirectorySeparatorChar}{document.Name}");
 
-                    var symbolsList = new List<INamedTypeSymbol>();
+                    var symbolsList = new List<ITypeSymbol>();
                     var model = await document.GetSemanticModelAsync();
                     if (model is null)
                     {
@@ -102,14 +103,14 @@ namespace NsAbsVisitAsync.NsCliTools
                     foreach (var node in nodes)
                     {
                         var symbol = model.GetDeclaredSymbol(node);
-                        if (symbol is not INamedTypeSymbol namedTypeSymbol)
+                        if (symbol is not ITypeSymbol typedSymbol)
                             continue;
-                        if (namedTypeSymbol.DeclaredAccessibility != Accessibility.Public)
+                        if (typedSymbol.DeclaredAccessibility != Accessibility.Public)
                         {
                             Console.WriteLine($"\t跳过非公开类型: {symbol.ToDisplayString()}");
                             continue;
                         }
-                        if (namedTypeSymbol.IsStatic)
+                        if (typedSymbol.IsStatic)
                         {
                             Console.WriteLine($"\t跳过静态类型: {symbol.ToDisplayString()}");
                             continue;
@@ -117,10 +118,13 @@ namespace NsAbsVisitAsync.NsCliTools
                         else
                             Console.WriteLine($"\t发现目标类型: {symbol.ToDisplayString()}");
 
-                        symbolsList.Add(namedTypeSymbol);
+                        symbolsList.Add(typedSymbol);
 
-                        foreach (var member in namedTypeSymbol.GetVisitableDataMembers())
-                            Console.WriteLine($"\t\t目标成员: {member.ToDisplayParts().Last()}");
+                        if (typedSymbol is INamedTypeSymbol namedTypedSymbol)
+                        {
+                            foreach (var member in namedTypedSymbol.GetVisitableDataMembers())
+                                Console.WriteLine($"\t\t目标成员: {member.ToDisplayParts().Last()}");
+                        }
                     }
                     if (symbolsList.Any())
                         buildingSymbols.Add(document, symbolsList.ToImmutableList());
@@ -457,18 +461,40 @@ using NsAnyLR;
             var visitorUsingStmt = $"using var {visitorVarName} = await {memberVisitorProviderParamName}.GetMemberVisitorAsync<{dataTypeFullName}, {memberTypeFullName}>(visitor, {memberSymbolsCount}u, \"{memberSymbol.Name}\", token);";
 
             var receptionistVarName = $"receptionist_{memberSymbol.Name}";
-            var optRecptVarName = $"opt_{receptionistVarName}";
-            var optRecpDeclStmt = $"var {optRecptVarName} = await {injectTypeName}.GetAsync<{memberTypeFullName}>(token);";
-            var optRecpIfStmt = $"if (!{optRecptVarName}.IsSome(out var {receptionistVarName}))";
-            var recpSuccIfStmt = $"if (!await {receptionistVarName}.ReceptAsync(data.{memberSymbol.Name}, {visitorVarName}, {memberVisitorProviderParamName}, token))";
-            var retLine = "return false;";
 
             await ioStream.WriteAsync($"{tab2}{visitorUsingStmt}\n");
-            await ioStream.WriteAsync($"{tab2}{optRecpDeclStmt}\n");
-            await ioStream.WriteAsync($"{tab2}{optRecpIfStmt}\n");
-            await ioStream.WriteAsync($"{tab2}{tab}{retLine}\n");
+
+            var retFalseLine = "return false;";
+
+            if (memberTypeSymbol.ImplementsIEnumerableOfKeyValuePair(out var keyType, out var valType))
+            {
+                var keyTypeFullName = keyType.ToDisplayString();
+                var valTypeFullName = valType.ToDisplayString();
+                var receptionistDeclStmt = $"var {receptionistVarName} = new DictReceptionist<{memberTypeFullName}, {keyTypeFullName}, {valTypeFullName}>();";
+
+                await ioStream.WriteAsync($"{tab2}{receptionistDeclStmt}\n");
+            }
+            else if (memberTypeSymbol.ImplementsIEnumerableT(out var elementType) && memberTypeSymbol.SpecialType != SpecialType.System_String)
+            {
+                var elementTypeFullName = elementType.ToDisplayString();
+                var receptionistDeclStmt = $"var {receptionistVarName} = new ListReceptionist<{memberTypeFullName}, {elementTypeFullName}>();";
+
+                await ioStream.WriteAsync($"{tab2}{receptionistDeclStmt}\n");
+            }
+            else
+            {
+                var optRecptVarName = $"opt_{receptionistVarName}";
+                var optRecpDeclStmt = $"var {optRecptVarName} = await {injectTypeName}.GetAsync<{memberTypeFullName}>(token);";
+                var optRecpIfStmt = $"if (!{optRecptVarName}.IsSome(out var {receptionistVarName}))";
+
+                await ioStream.WriteAsync($"{tab2}{optRecpDeclStmt}\n");
+                await ioStream.WriteAsync($"{tab2}{optRecpIfStmt}\n");
+                await ioStream.WriteAsync($"{tab2}{tab}{retFalseLine}\n");
+            }
+            var recpSuccIfStmt = $"if (!await {receptionistVarName}.ReceptAsync(data.{memberSymbol.Name}, {visitorVarName}, {memberVisitorProviderParamName}, token))";
+
             await ioStream.WriteAsync($"{tab2}{recpSuccIfStmt}\n");
-            await ioStream.WriteAsync($"{tab2}{tab}{retLine}\n\n");
+            await ioStream.WriteAsync($"{tab2}{tab}{retFalseLine}\n\n");
         }
 
         static async ValueTask Receptionist_GenerateForSubTypeAsync(
@@ -477,8 +503,8 @@ using NsAnyLR;
             string injectTypeName,
             string dataVarName,
             string memberVisitorProviderParamName,
-            INamedTypeSymbol dataTypeSymbol,
-            INamedTypeSymbol subTypeSymbol,
+            ITypeSymbol dataTypeSymbol,
+            ITypeSymbol subTypeSymbol,
             uint variantsCount)
         {
             var tab = codeGenSettings.TabStr;
@@ -757,11 +783,13 @@ using NsAnyLR;
             var datTypFullName = dataTypeSymbol.ToDisplayString();
             var parserParamName = "parser";
 
-            var implementations = dataTypeSymbol.FindImplementations(symbolsDict);
+            var implementations = dataTypeSymbol
+                .FindImplementations(symbolsDict)
+                .Where(x => x is INamedTypeSymbol)
+                .Select(x => (INamedTypeSymbol)x);
             if (!implementations.Any())
-            {
                 return;
-            }
+
             var index = 0u;
             foreach (var subTypeSymbol in implementations)
             {
@@ -934,20 +962,18 @@ using NsAnyLR;
 
     internal static class SymbolInherictOrImplExt
     {
-        public static ImmutableList<INamedTypeSymbol> FindImplementations(
-            this INamedTypeSymbol targetType,
-            SymbolsDictionary symbolsDict,
-            CancellationToken cancellationToken = default)
+        public static IEnumerable<ITypeSymbol> FindImplementations(
+            this ITypeSymbol targetType,
+            SymbolsDictionary symbolsDict)
         {
-            var query =
+            return
                 from symbolsList in symbolsDict.Values
                 from s in symbolsList
-                where s is INamedTypeSymbol symbol && symbol.InheritsOrImplements(targetType)
-                select s as INamedTypeSymbol;
-            return query.ToImmutableList();
+                where s.InheritsOrImplements(targetType)
+                select s;
         }
 
-        public static bool InheritsOrImplements(this INamedTypeSymbol typeSymbol, INamedTypeSymbol targetSymbol)
+        public static bool InheritsOrImplements(this ITypeSymbol typeSymbol, ITypeSymbol targetSymbol)
         {
             // Check interface implementation
             if (targetSymbol.TypeKind == TypeKind.Interface)
@@ -967,6 +993,48 @@ using NsAnyLR;
                 }
             }
 
+            return false;
+        }
+
+        public static bool ImplementsIEnumerableT(
+            this ITypeSymbol typeSymbol,
+            [NotNullWhen(true)] out ITypeSymbol? elementType)
+        {
+            foreach (var iface in typeSymbol.AllInterfaces)
+            {
+                if (iface is INamedTypeSymbol named &&
+                    named.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T)
+                {
+                    elementType = named.TypeArguments[0];
+                    return true;
+                }
+            }
+            elementType = default;
+            return false;
+        }
+
+        public static bool ImplementsIEnumerableOfKeyValuePair(
+            this ITypeSymbol typeSymbol,
+            [NotNullWhen(true)] out ITypeSymbol? keyType,
+            [NotNullWhen(true)] out ITypeSymbol? valueType)
+        {
+            foreach (var iface in typeSymbol.AllInterfaces)
+            {
+                if (iface is INamedTypeSymbol named &&
+                    named.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T)
+                {
+                    var arg = named.TypeArguments[0];
+                    if (arg is INamedTypeSymbol pair &&
+                        pair.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.KeyValuePair<TKey, TValue>")
+                    {
+                        keyType = pair.TypeArguments[0];
+                        valueType = pair.TypeArguments[1];
+                        return true;
+                    }
+                }
+            }
+            keyType = null;
+            valueType = null;
             return false;
         }
 
