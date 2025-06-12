@@ -47,15 +47,16 @@
             IVisitorProvider provider,
             CancellationToken token = default)
         {
-            using var visitor_Properties = await provider.GetMemberVisitorAsync<SampleGenVisit.SampleStruct, List<(string, System.Type)>>(visitor, 2u, nameof(SampleGenVisit.SampleStruct.Properties), token);
-            var receptionist_Properties = new ListReceptionist<List<(string, System.Type)>, (string, System.Type)>();
-            // var opt_receptionist_Properties = await ReceptionistInject.GetAsync<List<(string, System.Type)>>(token);
-            // if (!opt_receptionist_Properties.IsSome(out var receptionist_Properties))
-            //     return false;
+            using var memberVisitorProvider = await provider.ProviderForMembersAsync(visitor, 2u, token);
+
+            using var visitor_Properties = await memberVisitorProvider.GetMemberVisitorAsync<List<(string, System.Type)>>("Properties", token);
+            var opt_receptionist_Properties = await ReceptionistInject.GetAsync<List<(string, System.Type)>>(token);
+            if (!opt_receptionist_Properties.IsSome(out var receptionist_Properties))
+                receptionist_Properties = new ListReceptionist<List<(string, System.Type)>, (string, System.Type)>();
             if (!await receptionist_Properties.ReceptAsync(data.Properties, visitor_Properties, provider, token))
                 return false;
 
-            using var visitor_CanonicalName = await provider.GetMemberVisitorAsync<SampleGenVisit.SampleStruct, string>(visitor, 1u, nameof(SampleGenVisit.SampleStruct.CanonicalName), token);
+            using var visitor_CanonicalName = await memberVisitorProvider.GetMemberVisitorAsync<string>("CanonicalName", token);
             var opt_receptionist_CanonicalName = await ReceptionistInject.GetAsync<string>(token);
             if (!opt_receptionist_CanonicalName.IsSome(out var receptionist_CanonicalName))
                 return false;
@@ -76,17 +77,29 @@
             IParserProvider provider,
             CancellationToken token = default)
         {
-            using var parser_Properties = await provider.GetMemberParserAsync<SampleGenVisit.SampleStruct, List<(string, System.Type)>>(parser, 2u, "Properties", token);
-            var parse_Properties_result = await parser_Properties.TryParseAsync(token);
-            if (parse_Properties_result.IsErr(out var build_Propertis_error))
+            using var memberParserProvider = await provider.ProviderForMemberAsync(parser, 2u, token);
+
+            using var parser_Properties = await memberParserProvider.GetMemberParserAsync<List<(string, System.Type)>>("Properties", token);
+            var opt_builder_Properties = await BuilderInject.GetAsync<List<(string, Type)>>(token);
+            if (!opt_builder_Properties.IsSome(out var builder_Properties))
+                builder_Properties = new LstBuilder<List<(string, Type)>, (string, Type)>();
+            var build_Properties_result = await builder_Properties.TryBuildAsync(parser_Properties, provider, token);
+            if (!build_Properties_result.TryOk(out var build_Properties_ok, out var build_Propertis_error))
                 return Result.Err(build_Propertis_error);
 
-            using var builder_CanonicalName = await provider.GetMemberParserAsync<SampleGenVisit.SampleStruct, string>(parser, 1u, "CanonicalName", token);
-            var build_CanonicalName_result = await builder_CanonicalName.TryParseAsync(token);
-            if (build_CanonicalName_result.IsErr(out var build_CanonicalName_error))
-                return Result.Err(build_CanonicalName_error);
+            using var parser_CanonicalName = await memberParserProvider.GetMemberParserAsync<string>("CanonicalName", token);
+            var opt_builder_CanonicalName = await BuilderInject.GetAsync<string>(token);
+            if (!opt_builder_CanonicalName.IsSome(out var builder_CanonicalName))
+                builder_CanonicalName = new StrBuilder();
+            var build_CanonicalName_result = await builder_CanonicalName.TryBuildAsync(parser_CanonicalName, provider, token);
+            if (!build_CanonicalName_result.TryOk(out var build_CanonicalName_ok, out var build_CanonicalName_err))
+                return Result.Err(build_CanonicalName_err);
 
-            return await parser.TryParseAsync(token);
+            return Result.Ok(new SampleGenVisit.SampleStruct()
+            {
+                Properties = build_Properties_ok,
+                CanonicalName = build_CanonicalName_ok
+            });
         }
     }
 
@@ -98,15 +111,18 @@
             IVisitorProvider provider,
             CancellationToken token = default)
         {
-            using var visitor_Name = await provider.GetMemberVisitorAsync<SampleGenVisit.AnotherClass, string>(visitor, 2u, nameof(SampleGenVisit.AnotherClass.Name), token);
+            var memberVisitorProvider = await provider.ProviderForMembersAsync(visitor, 2u, token);
+
+            using var visitor_Name = await memberVisitorProvider.GetMemberVisitorAsync<string>("Name", token);
             var opt_receptionist_Name = await ReceptionistInject.GetAsync<string>(token);
             if (!opt_receptionist_Name.IsSome(out var receptionist_Name))
                 return false;
             if (!await receptionist_Name.ReceptAsync(data.Name, visitor_Name, provider, token))
                 return false;
 
-            using var visitor_MyList = await provider.GetMemberVisitorAsync<SampleGenVisit.AnotherClass, List<uint>>(visitor, 1u, nameof(SampleGenVisit.AnotherClass.MyList), token);
-            if (!await visitor_MyList.VisitAsync(data.MyList, token))
+            using var visitor_MyList = await memberVisitorProvider.GetMemberVisitorAsync<List<uint>>("MyList", token);
+            var receptionist_MyList = new ListReceptionist<List<uint>, uint>();
+            if (!await receptionist_MyList.ReceptAsync(data.MyList, visitor_MyList, provider, token))
                 return false;
 
             return true;
@@ -121,20 +137,21 @@
             IVisitorProvider provider,
             CancellationToken token = default)
         {
+            var variantProvider = await provider.ProviderForVariantsAsync(visitor, token);
             if (data is SampleGenVisit.SampleStruct x_SampleStruct)
             {
-                using var visitor_SampleStruct = await provider.GetVariantVisitorAsync<SampleGenVisit.ISampleInterface, SampleGenVisit.SampleStruct>(visitor, 2u, token);
                 var opt_receptionist_SampleStruct = await ReceptionistInject.GetAsync<SampleGenVisit.SampleStruct>(token);
                 if (!opt_receptionist_SampleStruct.IsSome(out var receptionist_SampleStruct))
                     return false;
+                using var visitor_SampleStruct = await variantProvider.GetVariantVisitorAsync<SampleGenVisit.SampleStruct>(token);
                 return await receptionist_SampleStruct.ReceptAsync(x_SampleStruct, visitor_SampleStruct, provider, token);
             }
             if (data is SampleGenVisit.AnotherClass x_AnotherClass)
             {
-                using var visitor_AnotherClass = await provider.GetVariantVisitorAsync<SampleGenVisit.ISampleInterface, SampleGenVisit.AnotherClass>(visitor, 1u, token);
                 var opt_receptionist_AnotherClass = await ReceptionistInject.GetAsync<SampleGenVisit.AnotherClass>(token);
                 if (!opt_receptionist_AnotherClass.IsSome(out var receptionist_AnotherClass))
                     return false;
+                using var visitor_AnotherClass = await variantProvider.GetVariantVisitorAsync<SampleGenVisit.AnotherClass>(token);
                 return await receptionist_AnotherClass.ReceptAsync(x_AnotherClass, visitor_AnotherClass, provider, token);
             }
             return false;
@@ -144,21 +161,19 @@
     public sealed class Builder_SampleGenVisit_ISampleInterface : IBuilder<SampleGenVisit.ISampleInterface>
     {
         static async UniTask<Result<SampleGenVisit.ISampleInterface, IParserError>> B0(
-            IParser<SampleGenVisit.ISampleInterface> parser,
-            IParserProvider provider,
+            IVariantParserProvider<SampleGenVisit.ISampleInterface> provider,
             CancellationToken token = default)
         {
-            using var parser_SampleStruct = await provider.GetVariantParserAsync<SampleGenVisit.ISampleInterface, SampleGenVisit.SampleStruct>(parser, token);
+            using var parser_SampleStruct = await provider.GetVariantParserAsync<SampleGenVisit.SampleStruct>(token);
             var parse_SampleStruct_result = await parser_SampleStruct.TryParseAsync(token);
             return parse_SampleStruct_result.MapOk(x => x as SampleGenVisit.ISampleInterface);
         }
 
         static async UniTask<Result<SampleGenVisit.ISampleInterface, IParserError>> B1(
-            IParser<SampleGenVisit.ISampleInterface> parser,
-            IParserProvider provider,
+            IVariantParserProvider<SampleGenVisit.ISampleInterface> provider,
             CancellationToken token = default)
         {
-            using var parser_AnotherClass = await provider.GetVariantParserAsync<SampleGenVisit.ISampleInterface, SampleGenVisit.AnotherClass>(parser, token);
+            using var parser_AnotherClass = await provider.GetVariantParserAsync<SampleGenVisit.AnotherClass>(token);
             var parse_AnotherClass_result = await parser_AnotherClass.TryParseAsync(token);
             return parse_AnotherClass_result.MapOk(x => x as SampleGenVisit.ISampleInterface);
         }
@@ -169,8 +184,7 @@
         ]);
 
         static readonly ReadOnlyMemory<Func<
-            IParser<SampleGenVisit.ISampleInterface>,
-            IParserProvider,
+            IVariantParserProvider<SampleGenVisit.ISampleInterface>,
             CancellationToken,
             UniTask<Result<SampleGenVisit.ISampleInterface, IParserError>>
         >> BRANCHES = new([B0, B1]);
@@ -180,12 +194,13 @@
             IParserProvider provider,
             CancellationToken token = default)
         {
-            var result = await parser.GetVariantTypeAsync(VARIANT_TYPES, token);
+            var variantParserProvider = await provider.ProviderForVariantsAsync(parser, token);
+            var result = await variantParserProvider.FindVariantTypeAsync(VARIANT_TYPES, token);
             if (!result.TryOk(out var index, out var getVariantTypeError))
                 return Result.Err(getVariantTypeError);
 
             var b = BRANCHES.Span[unchecked((int)index)];
-            return await b(parser, provider, token);
+            return await b(variantParserProvider, token);
         }
     }
 }

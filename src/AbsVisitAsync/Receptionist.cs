@@ -1,5 +1,6 @@
 namespace NsAbsVisitAsync
 {
+    using System;
     using System.Collections.Generic;
     using System.Linq;
     using System.Threading;
@@ -43,7 +44,7 @@ namespace NsAbsVisitAsync
             => this.dict_.GetAsync(TypedSingletonAsyncDict.TryType<IReceptionist<T>>, token);
     }
 
-    public sealed class ListReceptionist<L, E> : IReceptionist<L>
+    public readonly struct ListReceptionist<L, E> : IReceptionist<L>
         where L : IEnumerable<E>
     {
         public async UniTask<bool> ReceptAsync(
@@ -57,18 +58,16 @@ namespace NsAbsVisitAsync
             if (provider is IListVisitorProvider<L, E> lp)
                 elemVisitor = await lp.GetListElementVisitorAsync(visitor, uLen, token);
             else
-                elemVisitor = await provider.GetMemberVisitorAsync<L, E>(visitor, uLen, string.Empty, token);
+                throw new NotSupportedException($"Unsupported list type({typeof(L)}) for receptionist({this.GetType()})");
 
             foreach (var elem in list)
-            {
                 if (!await elemVisitor.VisitAsync(elem, token))
                     return false;
-            }
             return true;
         }
     }
 
-    public sealed class DictReceptionist<D, K, V> : IReceptionist<D>
+    public readonly struct DictReceptionist<D, K, V> : IReceptionist<D>
         where D : IEnumerable<KeyValuePair<K, V>>
     {
         public async UniTask<bool> ReceptAsync(
@@ -82,7 +81,7 @@ namespace NsAbsVisitAsync
             if (provider is IDictionaryVisitorProvider<D, K, V> dp)
                 entryVisitor = await dp.GetDictionaryEntriesVisitorAsync(visitor, uLen, token);
             else
-                entryVisitor = await provider.GetMemberVisitorAsync<D, KeyValuePair<K, V>>(visitor, uLen, string.Empty, token);
+                throw new NotSupportedException($"Unsupported dictionary type({typeof(D)}) for receptionist({this.GetType()})");
 
             foreach (var pair in dict)
             {
